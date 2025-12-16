@@ -92,49 +92,75 @@
             );
         };
 
-        // --- UTILIDADES ---
+        // --- UTILIDADES (FIXED) ---
         const exportChart = async (svgElement, action = 'download') => {
             if (!svgElement) return;
+
+            // 1. Clonar y Serializar
             const serializer = new XMLSerializer();
             let source = serializer.serializeToString(svgElement);
+            
+            // 2. Corregir Namespace
             if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
                 source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
             }
+
+            // 3. Estilos Inline Seguros (Sin @import externos para evitar bloqueos)
             const style = document.createElement('style');
-            style.textContent = `
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-                text { font-family: 'Inter', sans-serif !important; }
-            `;
+            style.textContent = `text { font-family: 'Inter', system-ui, -apple-system, sans-serif !important; }`;
             source = source.replace(/<defs>/, '<defs>' + style.outerHTML);
+
+            // 4. Configurar Canvas
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = new Image();
             const bbox = svgElement.getBoundingClientRect();
-            const scale = 2; 
+            const scale = 2; // Alta resolución
             canvas.width = (bbox.width || 500) * scale;
             canvas.height = (bbox.height || 600) * scale;
-            const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(svgBlob);
+
+            // 5. Usar Base64 para evitar problemas de CORS/Blob
+            const svgBase64 = btoa(unescape(encodeURIComponent(source)));
+            const imgSource = `data:image/svg+xml;base64,${svgBase64}`;
+
             img.onload = () => {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.scale(scale, scale);
                 ctx.drawImage(img, 0, 0);
-                URL.revokeObjectURL(url);
+
                 canvas.toBlob((blob) => {
+                    if (!blob) { alert("Error generando imagen."); return; }
+
                     if (action === 'download') {
                         const link = document.createElement('a');
                         link.download = `GlassGraph-${Date.now()}.png`;
                         link.href = URL.createObjectURL(blob);
+                        document.body.appendChild(link);
                         link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(link.href);
                     } else if (action === 'copy') {
                         try {
                             const item = new ClipboardItem({ 'image/png': blob });
-                            navigator.clipboard.write([item]).then(() => alert("¡Copiado! Pégalo en tu slide.")).catch(err => alert("Error al copiar. Usa descargar."));
-                        } catch (err) { alert("Tu navegador no soporta copiado directo."); }
+                            navigator.clipboard.write([item])
+                                .then(() => alert("¡Gráfico copiado al portapapeles!"))
+                                .catch(err => {
+                                    console.error(err);
+                                    alert("No se pudo copiar automáticamente. Por favor usa 'Descargar PNG'.");
+                                });
+                        } catch (err) {
+                            console.error(err);
+                            alert("Tu navegador no soporta el copiado directo de imágenes.");
+                        }
                     }
                 }, 'image/png');
             };
-            img.src = url;
+
+            img.onerror = () => {
+                alert("Hubo un error al procesar el gráfico SVG.");
+            };
+
+            img.src = imgSource;
         };
 
         const GradientDefs = () => (
