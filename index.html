@@ -240,10 +240,7 @@
                         <circle cx="0" cy="0" r={baseScale * 0.5} fill="url(#centerGrad)" filter="url(#glow)" />
                         <circle cx="0" cy="0" r={baseScale * 0.45} fill="none" stroke={centerColor} strokeWidth="2" opacity="0.5" />
                         {title ? (
-                            <>
-                                <text y="-5" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" style={{fontFamily: 'Inter'}}>GRÁFICO</text>
-                                <text y="15" textAnchor="middle" fill="white" fontSize="10" style={{fontFamily: 'Inter', textTransform:'uppercase'}}>{title.substring(0,8)}</text>
-                            </>
+                            <text y="5" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" style={{fontFamily: 'Inter', textTransform:'uppercase'}}>{title.substring(0,8)}</text>
                         ) : (
                             <g transform="translate(-10, -10)" stroke="white" strokeWidth="2">
                                 {centerIcon === 'star' && <polygon points="10 1 12.5 7.5 19 8.5 14 13.5 15.5 20 10 16.5 4.5 20 6 13.5 1 8.5 7.5 7.5 10 1" fill="none" transform="scale(1)" />}
@@ -258,33 +255,49 @@
             );
         };
 
-        // PROCESS SMART CHART (Proceso con texto multilínea)
+        // PROCESS SMART CHART (Proceso con Adaptación de Altura)
         const ProcessSmartChart = ({ categories, size = 400, theme, title }) => {
-            const barHeight = 80; // Aumentado para mejor texto
             const gap = 30;
-            const totalHeight = categories.length * (barHeight + gap) + 60;
             const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            
+            // Calculate dynamic positions
+            let currentY = 60;
+            const items = categories.map((cat) => {
+                const text = cat.value || "";
+                const charsPerLine = 40; // Approx
+                const lines = Math.ceil(text.length / charsPerLine) || 1;
+                const height = Math.max(60, 40 + (lines * 20)); // Base 60 + 20 per extra line
+                const pos = currentY;
+                currentY += height + gap;
+                return { ...cat, height, y: pos };
+            });
+            
+            const totalHeight = currentY + 30;
 
             return (
                 <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
                     <GradientDefs />
                     <ChartTitle title={title} width={size} theme={theme} />
-                    <g transform="translate(0, 60)">
-                        {categories.map((cat, i) => {
-                            const isLast = i === categories.length - 1;
+                    <g transform="translate(0, 0)">
+                        {items.map((cat, i) => {
+                            const isLast = i === items.length - 1;
+                            const nextY = isLast ? 0 : items[i+1].y;
+                            
                             return (
-                                <g key={cat.id} transform={`translate(20, ${i * (barHeight + gap)})`}>
-                                    {!isLast && <line x1="25" y1={barHeight} x2="25" y2={barHeight + gap} stroke={cat.color} strokeWidth="2" strokeDasharray="4" />}
-                                    <circle cx="25" cy={barHeight/2} r="20" fill={cat.color} filter="url(#glow)" />
-                                    <text x="25" y={barHeight/2} dy="0.3em" textAnchor="middle" fill="white" fontWeight="bold">{i+1}</text>
+                                <g key={cat.id} transform={`translate(20, ${cat.y})`}>
+                                    {/* Line connecting to next */}
+                                    {!isLast && <line x1="25" y1={cat.height} x2="25" y2={cat.height + gap} stroke={cat.color} strokeWidth="2" strokeDasharray="4" />}
+                                    
+                                    <circle cx="25" cy={cat.height/2} r="20" fill={cat.color} filter="url(#glow)" />
+                                    <text x="25" y={cat.height/2} dy="0.3em" textAnchor="middle" fill="white" fontWeight="bold">{i+1}</text>
                                     
                                     {/* Filled Card with foreignObject for text wrapping */}
-                                    <rect x="60" y="0" width={size - 80} height={barHeight} rx="10" fill={cat.color} fillOpacity="0.15" stroke={cat.color} strokeOpacity="0.5" />
+                                    <rect x="60" y="0" width={size - 80} height={cat.height} rx="10" fill={cat.color} fillOpacity="0.15" stroke={cat.color} strokeOpacity="0.5" />
                                     
-                                    <foreignObject x="75" y="10" width={size - 130} height={barHeight - 20}>
+                                    <foreignObject x="75" y="10" width={size - 130} height={cat.height - 20}>
                                         <div xmlns="http://www.w3.org/1999/xhtml" style={{display:'flex', flexDirection:'column', justifyContent:'center', height:'100%', color: textColor, fontFamily: 'Inter, sans-serif'}}>
-                                            <div style={{fontWeight:'bold', fontSize:'16px', lineHeight:'1.2'}}>{cat.label}</div>
-                                            <div style={{fontSize:'13px', opacity:0.8, lineHeight:'1.2', marginTop:'2px', wordWrap: 'break-word', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'}}>{cat.value}</div>
+                                            <div style={{fontWeight:'bold', fontSize:'16px', lineHeight:'1.2', marginBottom:'4px'}}>{cat.label}</div>
+                                            <div style={{fontSize:'13px', opacity:0.8, lineHeight:'1.3', wordWrap: 'break-word'}}>{cat.value}</div>
                                         </div>
                                     </foreignObject>
                                 </g>
@@ -296,34 +309,45 @@
         };
 
         // CYCLE SMART CHART (Ciclo con burbujas adaptables)
-        const CycleSmartChart = ({ categories, size = 400, theme, title }) => {
+        const CycleSmartChart = ({ categories, size = 400, theme, title, centerLabel }) => {
+            // Determine sizing based on max text length
+            const maxTextLen = Math.max(...categories.map(c => (c.value || "").length));
+            const bubbleRadius = Math.max(45, 30 + Math.sqrt(maxTextLen) * 5); // Grow bubble with text
+            const layoutRadius = Math.max(130, size/2 * 0.5 + (bubbleRadius - 45)); // Push out if bubbles grow
+            
             const centerX = size / 2;
             const centerY = size / 2 + 20;
-            const radius = 130;
             const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            
+            // Adjust viewBox to ensure everything fits
+            const totalSize = (layoutRadius + bubbleRadius) * 2 + 60;
+            const viewBoxStart = centerX - totalSize/2;
 
             return (
-                <svg width={size} height={size + 50} viewBox={`0 0 ${size} ${size + 50}`}>
+                <svg width={size} height={totalSize} viewBox={`${viewBoxStart} ${centerY - totalSize/2} ${totalSize} ${totalSize}`}>
                     <GradientDefs />
-                    <ChartTitle title={title} width={size} theme={theme} />
+                    {/* Render title manually at top relative to new viewBox */}
+                    {title && <text x={centerX} y={centerY - totalSize/2 + 40} textAnchor="middle" fill={textColor} fontSize="24" fontWeight="900" style={{fontFamily: 'Inter, sans-serif', textTransform: 'uppercase'}}>{title}</text>}
+                    
                     <g transform={`translate(${centerX}, ${centerY})`}>
                         <circle r="45" fill={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} stroke={textColor} strokeOpacity="0.2" />
-                        <text dy="0.3em" textAnchor="middle" fill={textColor} fontSize="10" fontWeight="bold">CICLO</text>
+                        <text dy="0.3em" textAnchor="middle" fill={textColor} fontSize="12" fontWeight="bold">{centerLabel || "CICLO"}</text>
 
                         {categories.map((cat, i) => {
                             const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
-                            const x = Math.cos(angle) * radius;
-                            const y = Math.sin(angle) * radius;
+                            const x = Math.cos(angle) * layoutRadius;
+                            const y = Math.sin(angle) * layoutRadius;
                             
                             return (
                                 <g key={cat.id}>
                                     <line x1="0" y1="0" x2={x} y2={y} stroke={cat.color} strokeWidth="1" strokeOpacity="0.5" />
-                                    <circle cx={x} cy={y} r="45" fill={cat.color} fillOpacity="0.2" stroke={cat.color} strokeWidth="2" filter="url(#glow)" />
+                                    <circle cx={x} cy={y} r={bubbleRadius} fill={cat.color} fillOpacity="0.2" stroke={cat.color} strokeWidth="2" filter="url(#glow)" />
                                     
-                                    <foreignObject x={x - 40} y={y - 25} width="80" height="50">
-                                        <div xmlns="http://www.w3.org/1999/xhtml" style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color: textColor, fontSize:'10px', textAlign:'center', lineHeight:'1.1'}}>
-                                            <span style={{fontWeight:'bold', fontSize:'11px', marginBottom:'2px'}}>{cat.label}</span>
-                                            <span style={{opacity:0.8, fontSize:'10px', overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{cat.value}</span>
+                                    {/* ForeignObject centered on x,y */}
+                                    <foreignObject x={x - bubbleRadius + 10} y={y - bubbleRadius + 10} width={bubbleRadius * 2 - 20} height={bubbleRadius * 2 - 20}>
+                                        <div xmlns="http://www.w3.org/1999/xhtml" style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color: textColor, textAlign:'center', lineHeight:'1.2'}}>
+                                            <span style={{fontWeight:'bold', fontSize:'12px', marginBottom:'4px'}}>{cat.label}</span>
+                                            <span style={{opacity:0.9, fontSize:'11px', wordWrap:'break-word'}}>{cat.value}</span>
                                         </div>
                                     </foreignObject>
                                 </g>
@@ -568,6 +592,7 @@
             const [chartTitle, setChartTitle] = useState("");
             const [centerColor, setCenterColor] = useState("#3b82f6");
             const [centerIcon, setCenterIcon] = useState("pie");
+            const [centerLabel, setCenterLabel] = useState("CICLO"); // Nuevo estado para Ciclo
             const chartRef = useRef(null);
 
             const [simpleData, setSimpleData] = useState({ label: 'Ventas', value: 75, max: 100, c1: '#3b82f6', c2: '#06b6d4' });
@@ -642,6 +667,14 @@
                                         </div>
                                     )}
 
+                                    {/* Config Especial Ciclo */}
+                                    {type === 'cycle' && (
+                                        <div className="mb-6">
+                                            <label className="text-xs font-bold text-slate-500 mb-2 block">TEXTO CENTRAL</label>
+                                            <input type="text" value={centerLabel} onChange={e=>setCenterLabel(e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white focus:border-cyan-500 outline-none" />
+                                        </div>
+                                    )}
+
                                     {currentTypeConfig.mode === 'multi' ? (
                                         <div className="space-y-3">
                                             {categories.map(cat => (
@@ -682,7 +715,7 @@
                                         {type==='ring' && <RingChart categories={categories} customTotal={customTotal} theme={exportTheme} title={chartTitle} />}
                                         {type==='position' && <PositionTableChart categories={categories} theme={exportTheme} title={chartTitle} />}
                                         {type==='process' && <ProcessSmartChart categories={categories} theme={exportTheme} title={chartTitle} />}
-                                        {type==='cycle' && <CycleSmartChart categories={categories} theme={exportTheme} title={chartTitle} />}
+                                        {type==='cycle' && <CycleSmartChart categories={categories} theme={exportTheme} title={chartTitle} centerLabel={centerLabel} />}
                                         {type==='pyramid' && <PyramidSmartChart categories={categories} theme={exportTheme} title={chartTitle} />}
                                         {type==='bar' && <BarChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} theme={exportTheme} title={chartTitle} />}
                                         {type==='gauge' && <GaugeChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} theme={exportTheme} title={chartTitle} />}
