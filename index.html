@@ -26,6 +26,12 @@
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+        .light-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #1e293b;
+        }
         .scrollbar-hide::-webkit-scrollbar {
             display: none;
         }
@@ -51,41 +57,36 @@
             border-radius: 50%;
             border: 2px solid rgba(255,255,255,0.2);
         }
+        /* Animaciones */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
     </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen selection:bg-cyan-500 selection:text-white overflow-x-hidden">
+<body class="bg-slate-900 text-white min-h-screen selection:bg-cyan-500 selection:text-white overflow-x-hidden transition-colors duration-500">
 
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useRef, useEffect, useMemo } = React;
+        const { useState, useRef, useEffect } = React;
 
-        // --- ICONOS SVG (Fixed: Wrapped multiple elements in fragments) ---
+        // --- ICONOS ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 pie: <path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z" />,
                 activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />,
                 circle: <circle cx="12" cy="12" r="10" />,
                 bar: <path d="M12 20V10M18 20V4M6 20v-4" />,
+                radar: <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2" />,
                 download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />,
                 copy: <><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></>,
                 trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>,
                 plus: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
-                calculator: <><rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" /><line x1="16" y1="14" x2="16" y2="14" /><line x1="12" y1="14" x2="12" y2="14" /><line x1="8" y1="14" x2="8" y2="14" /><line x1="16" y1="18" x2="16" y2="18" /><line x1="12" y1="18" x2="12" y2="18" /><line x1="8" y1="18" x2="8" y2="18" /></>
+                calculator: <><rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" /><line x1="16" y1="14" x2="16" y2="14" /><line x1="12" y1="14" x2="12" y2="14" /><line x1="8" y1="14" x2="8" y2="14" /><line x1="16" y1="18" x2="16" y2="18" /><line x1="12" y1="18" x2="12" y2="18" /><line x1="8" y1="18" x2="8" y2="18" /></>,
+                sun: <><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></>,
+                moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
             };
             return (
-                <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width={size} 
-                    height={size} 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    className={className}
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                     {icons[name] || <circle cx="12" cy="12" r="10" />}
                 </svg>
             );
@@ -94,191 +95,226 @@
         // --- UTILIDADES ---
         const exportChart = async (svgElement, action = 'download') => {
             if (!svgElement) return;
-
             const serializer = new XMLSerializer();
-            // Asegurar que el SVG tenga namespaces y estilos inline básicos si es necesario
             let source = serializer.serializeToString(svgElement);
             if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
                 source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
             }
-            
-            // Añadir fuentes al SVG para que se vean bien al exportar (intento básico)
             const style = document.createElement('style');
-            style.textContent = `text { font-family: 'Inter', sans-serif; }`;
-            
+            style.textContent = `
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+                text { font-family: 'Inter', sans-serif !important; }
+            `;
+            source = source.replace(/<defs>/, '<defs>' + style.outerHTML);
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = new Image();
-
-            // Tamaño base del SVG
             const bbox = svgElement.getBoundingClientRect();
-            // Multiplicador de resolución (Alta calidad)
             const scale = 2; 
             canvas.width = (bbox.width || 500) * scale;
-            canvas.height = (bbox.height || 500) * scale;
-
+            canvas.height = (bbox.height || 600) * scale;
             const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
             const url = URL.createObjectURL(svgBlob);
-
             img.onload = () => {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.scale(scale, scale);
                 ctx.drawImage(img, 0, 0);
                 URL.revokeObjectURL(url);
-
-                try {
-                    canvas.toBlob((blob) => {
-                        if (action === 'download') {
-                            const link = document.createElement('a');
-                            link.download = `GlassGraph-${Date.now()}.png`;
-                            link.href = URL.createObjectURL(blob);
-                            link.click();
-                        } else if (action === 'copy') {
-                            try {
-                                const item = new ClipboardItem({ 'image/png': blob });
-                                navigator.clipboard.write([item]).then(() => {
-                                    alert("¡Gráfico copiado al portapapeles! Pégalo en tu slide.");
-                                }).catch(err => {
-                                    console.error("Fallo clipboard:", err);
-                                    alert("No se pudo copiar automáticamente (limitación del navegador). Por favor usa 'Descargar PNG'.");
-                                });
-                            } catch (err) {
-                                alert("Tu navegador no soporta copiado directo de imágenes. Usa Descargar.");
-                            }
-                        }
-                    }, 'image/png');
-                } catch (e) {
-                    console.error(e);
-                }
+                canvas.toBlob((blob) => {
+                    if (action === 'download') {
+                        const link = document.createElement('a');
+                        link.download = `GlassGraph-${Date.now()}.png`;
+                        link.href = URL.createObjectURL(blob);
+                        link.click();
+                    } else if (action === 'copy') {
+                        try {
+                            const item = new ClipboardItem({ 'image/png': blob });
+                            navigator.clipboard.write([item]).then(() => alert("¡Copiado! Pégalo en tu slide.")).catch(err => alert("Error al copiar. Usa descargar."));
+                        } catch (err) { alert("Tu navegador no soporta copiado directo."); }
+                    }
+                }, 'image/png');
             };
             img.src = url;
         };
-
-        // --- COMPONENTES DE GRÁFICOS ---
 
         const GradientDefs = () => (
             <defs>
                 <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
                     <feGaussianBlur stdDeviation="4" result="coloredBlur" />
-                    <feMerge>
-                        <feMergeNode in="coloredBlur" />
-                        <feMergeNode in="SourceGraphic" />
-                    </feMerge>
+                    <feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
                 </filter>
             </defs>
         );
 
-        // --- Gráfico de Anillo (Categorías) ---
-        const RingChart = ({ categories, size = 400 }) => {
-            const total = categories.reduce((acc, curr) => acc + curr.value, 0);
-            let currentAngle = 0;
-            const radius = 100;
-            const stroke = 30;
-            const normalizedRadius = radius - stroke / 2;
-            const circumference = normalizedRadius * 2 * Math.PI;
-
+        const SVGLegend = ({ categories, width, yStart, theme }) => {
+            const itemHeight = 30;
+            const colWidth = width / 2;
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            
             return (
-                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-2xl">
-                    <GradientDefs />
-                    {/* Fondo */}
-                    <circle
-                        cx={size/2} cy={size/2} r={normalizedRadius}
-                        fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={stroke}
-                    />
-                    
-                    {/* Segmentos */}
+                <g transform={`translate(0, ${yStart})`}>
                     {categories.map((cat, i) => {
-                        if (cat.value <= 0) return null;
-                        const percentage = cat.value / total;
-                        const dashArray = `${percentage * circumference} ${circumference}`;
-                        const offset = circumference - currentAngle + (circumference * 0.25); // Rotate -90deg logic handled by offset
-                        
-                        // Guardar ángulo para el siguiente
-                        const segmentAngle = percentage * circumference;
-                        
-                        const elem = (
-                            <circle
-                                key={cat.id}
-                                cx={size/2}
-                                cy={size/2}
-                                r={normalizedRadius}
-                                fill="none"
-                                stroke={cat.color}
-                                strokeWidth={stroke}
-                                strokeDasharray={dashArray}
-                                strokeDashoffset={currentAngle * -1 + (circumference * 0.25)} 
-                                strokeLinecap="round"
-                                filter="url(#glow)"
-                                style={{ transition: 'all 0.5s ease' }}
-                                transform={`rotate(-90 ${size/2} ${size/2})`}
-                            />
-                        );
-                        currentAngle += segmentAngle;
-                        return elem;
-                    })}
-
-                    {/* Texto Centro */}
-                    <text x="50%" y="48%" textAnchor="middle" dy=".3em" fill="white" fontSize="48" fontWeight="bold">
-                        {total}
-                    </text>
-                    <text x="50%" y="62%" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="16">
-                        Total
-                    </text>
-                </svg>
-            );
-        };
-
-        // --- Gráfico de Torta (Categorías) ---
-        const PieChartComponent = ({ categories, size = 400 }) => {
-            const total = categories.reduce((acc, curr) => acc + curr.value, 0);
-            let accumulatedPercent = 0;
-
-            const getCoordinates = (percent) => {
-                const x = Math.cos(2 * Math.PI * percent);
-                const y = Math.sin(2 * Math.PI * percent);
-                return [x, y];
-            };
-
-            return (
-                <svg width={size} height={size} viewBox="-1.2 -1.2 2.4 2.4" style={{transform: 'rotate(-90deg)'}}>
-                    <GradientDefs />
-                    {categories.map((cat) => {
-                        if (cat.value <= 0) return null;
-                        const percent = cat.value / total;
-                        const [startX, startY] = getCoordinates(accumulatedPercent);
-                        accumulatedPercent += percent;
-                        const [endX, endY] = getCoordinates(accumulatedPercent);
-                        const largeArcFlag = percent > .5 ? 1 : 0;
-
-                        const pathData = [
-                            `M 0 0`,
-                            `L ${startX} ${startY}`,
-                            `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
-                            `L 0 0`,
-                        ].join(' ');
-
+                        const x = (i % 2) * colWidth + 40;
+                        const y = Math.floor(i / 2) * itemHeight;
                         return (
-                            <g key={cat.id}>
-                                <path 
-                                    d={pathData} 
-                                    fill={cat.color} 
-                                    stroke="rgba(255,255,255,0.1)" 
-                                    strokeWidth="0.01"
-                                    filter="url(#glow)"
-                                    style={{transition: 'd 0.5s ease'}}
-                                />
+                            <g key={cat.id} transform={`translate(${x}, ${y})`}>
+                                <circle r="6" fill={cat.color} cy="-5" />
+                                <text x="15" y="0" fill={textColor} fontSize="14" fontWeight="500" style={{fontFamily: 'Inter, sans-serif'}}>
+                                    {cat.label}: <tspan fontWeight="bold" fillOpacity="0.7">{cat.value}</tspan>
+                                </text>
                             </g>
                         );
                     })}
-                    {/* Hueco central opcional para estilo moderno */}
-                    <circle cx="0" cy="0" r="0.1" fill="#0f172a" opacity="0.5" />
+                </g>
+            );
+        };
+
+        // --- GRÁFICOS ---
+
+        const RingChart = ({ categories, size = 400, theme }) => {
+            const total = categories.reduce((acc, curr) => acc + curr.value, 0);
+            let currentAngle = 0;
+            const radius = 100;
+            const stroke = 25;
+            const normalizedRadius = radius - stroke / 2;
+            const circumference = normalizedRadius * 2 * Math.PI;
+            const legendHeight = Math.ceil(categories.length / 2) * 30 + 40;
+            const totalHeight = size + legendHeight;
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            const trackColor = theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+            return (
+                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
+                    <GradientDefs />
+                    <g transform={`translate(0, 0)`}>
+                        <circle cx={size/2} cy={size/2} r={normalizedRadius} fill="none" stroke={trackColor} strokeWidth={stroke}/>
+                        {categories.map((cat, i) => {
+                            if (cat.value <= 0) return null;
+                            const percentage = cat.value / total;
+                            const dashArray = `${percentage * circumference} ${circumference}`;
+                            const elem = (
+                                <circle key={cat.id} cx={size/2} cy={size/2} r={normalizedRadius} fill="none" stroke={cat.color} strokeWidth={stroke} strokeDasharray={dashArray} strokeDashoffset={currentAngle * -1 + (circumference * 0.25)} strokeLinecap="round" filter="url(#glow)" transform={`rotate(-90 ${size/2} ${size/2})`} style={{ transition: 'all 0.5s ease' }}/>
+                            );
+                            currentAngle += percentage * circumference;
+                            return elem;
+                        })}
+                        <text x="50%" y={size/2} textAnchor="middle" dy="0.1em" fill={textColor} fontSize="48" fontWeight="800" style={{fontFamily: 'Inter, sans-serif'}}>{total}</text>
+                        <text x="50%" y={size/2 + 25} textAnchor="middle" fill={textColor} fillOpacity="0.5" fontSize="14" style={{fontFamily: 'Inter, sans-serif'}}>Total</text>
+                    </g>
+                    <SVGLegend categories={categories} width={size} yStart={size - 20} theme={theme} />
                 </svg>
             );
         };
 
-        // --- Gráfico de Barra (Simple) ---
-        const BarChart = ({ label, value, max, color1, color2, size = 400 }) => {
+        const DonutPieChart = ({ categories, size = 400, theme }) => {
+            const total = categories.reduce((acc, curr) => acc + curr.value, 0);
+            let accumulatedPercent = 0;
+            const legendHeight = Math.ceil(categories.length / 2) * 30 + 40;
+            const totalHeight = size + legendHeight;
+            const scale = size / 2.5; 
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const innerRadius = 0.6; // Hace que sea una Donut gruesa
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+
+            const getCoordinates = (percent, radius) => {
+                const x = Math.cos(2 * Math.PI * percent);
+                const y = Math.sin(2 * Math.PI * percent);
+                return [x * radius, y * radius];
+            };
+
+            return (
+                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
+                    <GradientDefs />
+                    <g transform={`translate(${centerX}, ${centerY}) scale(${scale}) rotate(-90)`}>
+                        {categories.map((cat) => {
+                            if (cat.value <= 0) return null;
+                            const percent = cat.value / total;
+                            const [startX, startY] = getCoordinates(accumulatedPercent, 1); // Outer
+                            const [endX, endY] = getCoordinates(accumulatedPercent + percent, 1);
+                            const [innerStartX, innerStartY] = getCoordinates(accumulatedPercent + percent, innerRadius); // Inner End (reverse)
+                            const [innerEndX, innerEndY] = getCoordinates(accumulatedPercent, innerRadius); // Inner Start
+                            
+                            const midAngle = accumulatedPercent + percent / 2;
+                            accumulatedPercent += percent;
+                            
+                            const largeArcFlag = percent > .5 ? 1 : 0;
+                            // Path complejo para donut segmentado
+                            // Move to outer start -> Arc to outer end -> Line to inner end -> Arc to inner start -> Close
+                            const pathData = [
+                                `M ${startX} ${startY}`,
+                                `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                                `L ${innerStartX} ${innerStartY}`,
+                                `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerEndX} ${innerEndY}`,
+                                `Z`
+                            ].join(' ');
+
+                            // Coordenadas para etiqueta
+                            const [labelX, labelY] = getCoordinates(midAngle, 0.8); 
+
+                            return (
+                                <g key={cat.id}>
+                                    <path d={pathData} fill={cat.color} stroke={theme === 'dark' ? '#0f172a' : '#ffffff'} strokeWidth="0.04" strokeLinejoin="round" filter="url(#glow)" style={{transition: 'd 0.5s ease'}} />
+                                    {percent > 0.08 && (
+                                        <g transform={`translate(${labelX}, ${labelY}) rotate(${90})`}>
+                                             <text textAnchor="middle" dy="0.3em" fill="white" fontSize="0.12" fontWeight="bold" style={{fontFamily: 'Inter, sans-serif', textShadow: '0px 1px 2px rgba(0,0,0,0.5)'}}>{Math.round(percent * 100)}%</text>
+                                        </g>
+                                    )}
+                                </g>
+                            );
+                        })}
+                    </g>
+                    <SVGLegend categories={categories} width={size} yStart={size - 20} theme={theme} />
+                </svg>
+            );
+        };
+
+        const RadarChart = ({ categories, size = 400, theme }) => {
+            const maxValue = Math.max(...categories.map(c => c.value), 1);
+            const radius = size / 2 - 60;
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const angleSlice = (Math.PI * 2) / categories.length;
+            const legendHeight = Math.ceil(categories.length / 2) * 30 + 40;
+            const totalHeight = size + legendHeight;
+            const gridColor = theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
+            const points = categories.map((cat, i) => {
+                const angle = i * angleSlice - Math.PI / 2;
+                const valueRadius = (cat.value / maxValue) * radius;
+                return [centerX + Math.cos(angle) * valueRadius, centerY + Math.sin(angle) * valueRadius];
+            }).map(p => p.join(',')).join(' ');
+
+            return (
+                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
+                    <GradientDefs />
+                    {Array.from({ length: 4 }).map((_, l) => {
+                        const levelRadius = (radius / 4) * (l + 1);
+                        const levelPoints = categories.map((_, i) => {
+                            const angle = i * angleSlice - Math.PI / 2;
+                            return [centerX + Math.cos(angle) * levelRadius, centerY + Math.sin(angle) * levelRadius];
+                        }).map(p => p.join(',')).join(' ');
+                        return <polygon key={l} points={levelPoints} fill="none" stroke={gridColor} strokeWidth="1" />;
+                    })}
+                    {categories.map((_, i) => {
+                         const angle = i * angleSlice - Math.PI / 2;
+                         return <line key={i} x1={centerX} y1={centerY} x2={centerX + Math.cos(angle) * radius} y2={centerY + Math.sin(angle) * radius} stroke={gridColor} />;
+                    })}
+                    <polygon points={points} fill="rgba(6, 182, 212, 0.4)" stroke="#22d3ee" strokeWidth="2" filter="url(#glow)"/>
+                    {categories.map((cat, i) => {
+                        const angle = i * angleSlice - Math.PI / 2;
+                        const r = (cat.value / maxValue) * radius;
+                        return <circle key={i} cx={centerX + Math.cos(angle) * r} cy={centerY + Math.sin(angle) * r} r="4" fill={cat.color} stroke="white" strokeWidth="1" />;
+                    })}
+                    <SVGLegend categories={categories} width={size} yStart={size - 20} theme={theme} />
+                </svg>
+            );
+        }
+
+        const BarChart = ({ label, value, max, color1, color2, size = 400, theme }) => {
             const percent = Math.min(100, Math.max(0, (value / max) * 100));
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            const trackColor = theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
             return (
                 <svg width={size} height={150} viewBox={`0 0 ${size} 150`}>
                     <defs>
@@ -286,42 +322,29 @@
                             <stop offset="0%" stopColor={color1} />
                             <stop offset="100%" stopColor={color2} />
                         </linearGradient>
-                        <filter id="glowBar">
-                            <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
-                            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
+                        <filter id="glowBar"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                     </defs>
-                    
-                    <text x="0" y="30" fill="white" fontSize="18" fontWeight="600">{label}</text>
-                    <text x={size} y="30" textAnchor="end" fill="rgba(255,255,255,0.7)" fontSize="16">{value} / {max}</text>
-
-                    <rect x="0" y="45" width={size} height="24" rx="12" fill="rgba(255,255,255,0.1)" />
-                    
-                    <rect 
-                        x="0" y="45" 
-                        width={(percent / 100) * size} 
-                        height="24" rx="12" 
-                        fill="url(#gradBar)"
-                        filter="url(#glowBar)"
-                        style={{ transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }}
-                    />
-                    
+                    <text x="0" y="30" fill={textColor} fontSize="18" fontWeight="600" style={{fontFamily: 'Inter, sans-serif'}}>{label}</text>
+                    <text x={size} y="30" textAnchor="end" fill={textColor} fillOpacity="0.7" fontSize="16" style={{fontFamily: 'Inter, sans-serif'}}>{value} / {max}</text>
+                    <rect x="0" y="45" width={size} height="24" rx="12" fill={trackColor} />
+                    <rect x="0" y="45" width={(percent / 100) * size} height="24" rx="12" fill="url(#gradBar)" filter="url(#glowBar)" style={{ transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }} />
                     <g style={{ transform: `translateX(${(percent / 100) * size}px)`, transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }}>
-                        <circle cx="0" cy="57" r="6" fill="white" />
-                        <text x="0" y="95" textAnchor="middle" fill={color2} fontSize="20" fontWeight="bold">{percent.toFixed(1)}%</text>
+                        <circle cx="0" cy="57" r="6" fill={theme === 'dark' ? 'white' : '#334155'} />
+                        <text x="0" y="95" textAnchor="middle" fill={color2} fontSize="20" fontWeight="bold" style={{fontFamily: 'Inter, sans-serif'}}>{percent.toFixed(1)}%</text>
                     </g>
                 </svg>
             );
         };
 
-        // --- Gráfico Medidor (Gauge Simple) ---
-        const GaugeChart = ({ label, value, max, color1, color2, size = 400 }) => {
+        const GaugeChart = ({ label, value, max, color1, color2, size = 400, theme }) => {
             const percent = Math.min(100, Math.max(0, (value / max) * 100));
             const radius = 120;
             const stroke = 25;
             const normalizedRadius = radius - stroke;
             const circumference = normalizedRadius * Math.PI; 
             const strokeDashoffset = circumference - (percent / 100) * circumference;
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            const trackColor = theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
 
             return (
                 <svg width={size} height={size/1.8} viewBox={`0 0 ${size} ${size/2 + 30}`}>
@@ -330,76 +353,45 @@
                             <stop offset="0%" stopColor={color1} />
                             <stop offset="100%" stopColor={color2} />
                         </linearGradient>
-                        <filter id="glowGauge">
-                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
+                        <filter id="glowGauge"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                     </defs>
-                    
-                    <path
-                        d={`M ${size/2 - radius + 10} ${size/2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${size/2 + radius - 10} ${size/2}`}
-                        stroke="rgba(255,255,255,0.1)" strokeWidth={stroke} fill="none" strokeLinecap="round"
-                    />
-                    <path
-                        d={`M ${size/2 - radius + 10} ${size/2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${size/2 + radius - 10} ${size/2}`}
-                        stroke="url(#gradGauge)" strokeWidth={stroke} fill="none"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={strokeDashoffset}
-                        strokeLinecap="round"
-                        filter="url(#glowGauge)"
-                        style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-                    />
-                    
-                    <text x="50%" y={size/2 - 20} textAnchor="middle" fill="white" fontSize="42" fontWeight="bold">
-                        {percent.toFixed(0)}%
-                    </text>
-                    <text x="50%" y={size/2 + 20} textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="16">
-                        {label}
-                    </text>
+                    <path d={`M ${size/2 - radius + 10} ${size/2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${size/2 + radius - 10} ${size/2}`} stroke={trackColor} strokeWidth={stroke} fill="none" strokeLinecap="round" />
+                    <path d={`M ${size/2 - radius + 10} ${size/2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${size/2 + radius - 10} ${size/2}`} stroke="url(#gradGauge)" strokeWidth={stroke} fill="none" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" filter="url(#glowGauge)" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+                    <text x="50%" y={size/2 - 20} textAnchor="middle" fill={textColor} fontSize="42" fontWeight="bold" style={{fontFamily: 'Inter, sans-serif'}}>{percent.toFixed(0)}%</text>
+                    <text x="50%" y={size/2 + 20} textAnchor="middle" fill={textColor} fillOpacity="0.6" fontSize="16" style={{fontFamily: 'Inter, sans-serif'}}>{label}</text>
                 </svg>
             );
         };
 
-        // --- LEYENDA (Solo para categorías) ---
-        const Legend = ({ categories }) => (
-            <div className="flex flex-wrap justify-center gap-4 mt-8">
-                {categories.map(cat => (
-                    <div key={cat.id} className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                        <div className="w-3 h-3 rounded-full" style={{backgroundColor: cat.color}}></div>
-                        <span className="text-sm font-medium text-slate-200">{cat.label}:</span>
-                        <span className="text-sm font-bold text-white">{cat.value}</span>
-                    </div>
-                ))}
-            </div>
+        // --- COMPONENTES UI (Input separado para evitar re-render y perdida de foco) ---
+        const CalcInput = ({ val, onChange }) => (
+            <input type="number" value={val} onChange={e => onChange(parseFloat(e.target.value)||0)} className="bg-white/10 border-b-2 border-white/20 px-2 py-1 w-24 text-center text-cyan-300 focus:outline-none focus:border-cyan-400 font-bold" />
         );
 
         // --- PESTAÑA CALCULADORA ---
         const CalculatorTab = () => {
             const [vals, setVals] = useState({
-                c1_p: 20, c1_t: 150,
-                c2_p: 30, c2_t: 120,
-                c3_old: 500, c3_new: 750
+                c1_p: 20, c1_t: 150, // % Total
+                c2_p: 30, c2_t: 120, // % Es
+                c3_old: 500, c3_new: 750, // Crecimiento
+                c4_price: 100, c4_disc: 15, // Descuento
+                c5_cost: 50, c5_price: 80 // Margen
             });
-
-            const Input = ({ val, onChange }) => (
-                <input 
-                    type="number" value={val} onChange={e => onChange(parseFloat(e.target.value)||0)}
-                    className="bg-white/10 border-b-2 border-white/20 px-2 py-1 w-24 text-center text-cyan-300 focus:outline-none focus:border-cyan-400 font-bold"
-                />
-            );
 
             const r1 = ((vals.c1_t * vals.c1_p) / 100).toFixed(2);
             const r2 = vals.c2_t ? ((vals.c2_p / vals.c2_t) * 100).toFixed(2) : "0";
             const diff = vals.c3_new - vals.c3_old;
             const r3 = vals.c3_old ? ((diff / vals.c3_old) * 100).toFixed(2) : "0";
+            const r4 = (vals.c4_price - (vals.c4_price * vals.c4_disc / 100)).toFixed(2);
+            const r5 = vals.c5_price ? (((vals.c5_price - vals.c5_cost) / vals.c5_price) * 100).toFixed(2) : "0";
 
             return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
                     <div className="glass-panel p-6 rounded-2xl flex flex-col gap-4">
                         <h3 className="text-cyan-400 font-bold flex items-center gap-2"><Icon name="circle" size={16}/> Porcentaje de un Total</h3>
                         <div className="text-lg leading-loose text-slate-300">
-                            ¿Cuánto es el <Input val={vals.c1_p} onChange={v => setVals({...vals, c1_p: v})}/> % 
-                            de <Input val={vals.c1_t} onChange={v => setVals({...vals, c1_t: v})}/> ?
+                            ¿Cuánto es el <CalcInput val={vals.c1_p} onChange={v => setVals(prev => ({...prev, c1_p: v}))}/> % 
+                            de <CalcInput val={vals.c1_t} onChange={v => setVals(prev => ({...prev, c1_t: v}))}/> ?
                         </div>
                         <div className="mt-auto pt-4 text-3xl font-black text-white">{r1}</div>
                     </div>
@@ -407,8 +399,8 @@
                     <div className="glass-panel p-6 rounded-2xl flex flex-col gap-4">
                         <h3 className="text-pink-400 font-bold flex items-center gap-2"><Icon name="pie" size={16}/> Qué Porcentaje Es</h3>
                         <div className="text-lg leading-loose text-slate-300">
-                            Si tengo <Input val={vals.c2_p} onChange={v => setVals({...vals, c2_p: v})}/> 
-                            de <Input val={vals.c2_t} onChange={v => setVals({...vals, c2_t: v})}/>, ¿qué % es?
+                            Si tengo <CalcInput val={vals.c2_p} onChange={v => setVals(prev => ({...prev, c2_p: v}))}/> 
+                            de <CalcInput val={vals.c2_t} onChange={v => setVals(prev => ({...prev, c2_t: v}))}/>, ¿qué % es?
                         </div>
                         <div className="mt-auto pt-4 text-3xl font-black text-white">{r2}%</div>
                     </div>
@@ -416,12 +408,30 @@
                     <div className="glass-panel p-6 rounded-2xl flex flex-col gap-4">
                         <h3 className="text-emerald-400 font-bold flex items-center gap-2"><Icon name="activity" size={16}/> Crecimiento</h3>
                         <div className="text-lg leading-loose text-slate-300">
-                            De <Input val={vals.c3_old} onChange={v => setVals({...vals, c3_old: v})}/> 
-                            a <Input val={vals.c3_new} onChange={v => setVals({...vals, c3_new: v})}/>, ¿cuánto cambió?
+                            De <CalcInput val={vals.c3_old} onChange={v => setVals(prev => ({...prev, c3_old: v}))}/> 
+                            a <CalcInput val={vals.c3_new} onChange={v => setVals(prev => ({...prev, c3_new: v}))}/>, ¿cuánto cambió?
                         </div>
                         <div className={`mt-auto pt-4 text-3xl font-black ${r3 > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                             {r3 > 0 ? '+' : ''}{r3}%
                         </div>
+                    </div>
+
+                    <div className="glass-panel p-6 rounded-2xl flex flex-col gap-4">
+                        <h3 className="text-yellow-400 font-bold flex items-center gap-2"><Icon name="download" size={16}/> Descuento Final</h3>
+                        <div className="text-lg leading-loose text-slate-300">
+                            Precio <CalcInput val={vals.c4_price} onChange={v => setVals(prev => ({...prev, c4_price: v}))}/> 
+                            menos el <CalcInput val={vals.c4_disc} onChange={v => setVals(prev => ({...prev, c4_disc: v}))}/> % OFF.
+                        </div>
+                        <div className="mt-auto pt-4 text-3xl font-black text-white">${r4}</div>
+                    </div>
+
+                    <div className="glass-panel p-6 rounded-2xl flex flex-col gap-4">
+                        <h3 className="text-blue-400 font-bold flex items-center gap-2"><Icon name="bar" size={16}/> Margen de Ganancia</h3>
+                        <div className="text-lg leading-loose text-slate-300">
+                            Costo <CalcInput val={vals.c5_cost} onChange={v => setVals(prev => ({...prev, c5_cost: v}))}/> 
+                            vs Venta <CalcInput val={vals.c5_price} onChange={v => setVals(prev => ({...prev, c5_price: v}))}/>.
+                        </div>
+                        <div className="mt-auto pt-4 text-3xl font-black text-white">{r5}%</div>
                     </div>
                 </div>
             );
@@ -430,139 +440,76 @@
         // --- APLICACIÓN PRINCIPAL ---
         const App = () => {
             const [tab, setTab] = useState('charts');
-            const [type, setType] = useState('pie'); // pie, ring, bar, gauge
+            const [type, setType] = useState('pie'); // pie, ring, bar, gauge, radar
+            const [exportTheme, setExportTheme] = useState('dark'); // 'dark' | 'light'
             const chartRef = useRef(null);
 
-            // Estado para Gráficos Simples (Bar, Gauge)
             const [simpleData, setSimpleData] = useState({ label: 'Ventas Totales', value: 75, max: 100, c1: '#3b82f6', c2: '#06b6d4' });
-
-            // Estado para Gráficos de Categorías (Pie, Ring)
             const [categories, setCategories] = useState([
-                { id: 1, label: 'Producto A', value: 40, color: '#f472b6' }, // Pink 400
-                { id: 2, label: 'Producto B', value: 25, color: '#22d3ee' }, // Cyan 400
-                { id: 3, label: 'Servicios', value: 35, color: '#a78bfa' }, // Purple 400
+                { id: 1, label: 'Prod. A', value: 40, color: '#f472b6' },
+                { id: 2, label: 'Prod. B', value: 25, color: '#22d3ee' },
+                { id: 3, label: 'Servicios', value: 35, color: '#a78bfa' },
             ]);
 
             const chartTypes = [
-                { id: 'pie', label: 'Torta', icon: 'pie', mode: 'multi' },
+                { id: 'pie', label: 'Torta Moderna', icon: 'pie', mode: 'multi' },
                 { id: 'ring', label: 'Anillo', icon: 'circle', mode: 'multi' },
+                { id: 'radar', label: 'Radar', icon: 'radar', mode: 'multi' },
                 { id: 'bar', label: 'Barra', icon: 'bar', mode: 'simple' },
                 { id: 'gauge', label: 'Medidor', icon: 'activity', mode: 'simple' }
             ];
 
             const currentTypeConfig = chartTypes.find(t => t.id === type);
 
-            // Helpers para Categorías
+            // Helpers
             const addCategory = () => {
                 const newId = Math.max(...categories.map(c => c.id), 0) + 1;
                 const colors = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#818cf8'];
-                const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                setCategories([...categories, { id: newId, label: 'Nuevo', value: 10, color: randomColor }]);
+                setCategories([...categories, { id: newId, label: 'Nuevo', value: 10, color: colors[Math.floor(Math.random() * colors.length)] }]);
             };
-
-            const updateCategory = (id, field, val) => {
-                setCategories(categories.map(c => c.id === id ? { ...c, [field]: val } : c));
-            };
-
-            const removeCategory = (id) => {
-                if (categories.length > 1) {
-                    setCategories(categories.filter(c => c.id !== id));
-                }
-            };
+            const updateCategory = (id, field, val) => setCategories(categories.map(c => c.id === id ? { ...c, [field]: val } : c));
+            const removeCategory = (id) => categories.length > 1 && setCategories(categories.filter(c => c.id !== id));
 
             return (
                 <div className="max-w-7xl mx-auto p-4 md:p-8">
                     {/* Header */}
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-10">
                         <div>
-                            <h1 className="text-5xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 via-white to-purple-400 bg-clip-text text-transparent">
-                                GlassGraph
-                            </h1>
+                            <h1 className="text-5xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 via-white to-purple-400 bg-clip-text text-transparent">GlassGraph</h1>
                             <p className="text-slate-400 mt-2 font-light">Diseña gráficos estéticos y calcula métricas</p>
                         </div>
                         <div className="glass-panel p-1.5 rounded-full flex gap-2">
-                            <button 
-                                onClick={() => setTab('charts')}
-                                className={`px-6 py-2 rounded-full font-semibold transition-all ${tab === 'charts' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                            >Gráficos</button>
-                            <button 
-                                onClick={() => setTab('calc')}
-                                className={`px-6 py-2 rounded-full font-semibold transition-all ${tab === 'calc' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                            >Calculadora %</button>
+                            <button onClick={() => setTab('charts')} className={`px-6 py-2 rounded-full font-semibold transition-all ${tab === 'charts' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}>Gráficos</button>
+                            <button onClick={() => setTab('calc')} className={`px-6 py-2 rounded-full font-semibold transition-all ${tab === 'calc' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white'}`}>Calculadora</button>
                         </div>
                     </div>
 
                     {tab === 'calc' ? <CalculatorTab /> : (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                            
-                            {/* Panel de Control */}
+                            {/* Panel Izq */}
                             <div className="lg:col-span-4 space-y-6">
-                                {/* Selector de Tipo */}
                                 <div className="glass-panel p-5 rounded-2xl">
                                     <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-4 block">Tipo de Gráfico</label>
                                     <div className="grid grid-cols-2 gap-3">
                                         {chartTypes.map(t => (
-                                            <button 
-                                                key={t.id} 
-                                                onClick={() => setType(t.id)}
-                                                className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${type === t.id ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300' : 'bg-transparent border-white/5 hover:bg-white/5 text-slate-400'}`}
-                                            >
-                                                <Icon name={t.icon} />
-                                                <span className="text-sm font-medium">{t.label}</span>
+                                            <button key={t.id} onClick={() => setType(t.id)} className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${type === t.id ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300' : 'bg-transparent border-white/5 hover:bg-white/5 text-slate-400'}`}>
+                                                <Icon name={t.icon} /> <span className="text-sm font-medium">{t.label}</span>
                                             </button>
                                         ))}
                                     </div>
                                 </div>
-
-                                {/* Configuración de Datos */}
                                 <div className="glass-panel p-5 rounded-2xl max-h-[60vh] overflow-y-auto custom-scroll">
-                                    <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-4 block">
-                                        Datos ({currentTypeConfig.mode === 'multi' ? 'Categorías' : 'Valor Único'})
-                                    </label>
-
+                                    <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-4 block">Datos</label>
                                     {currentTypeConfig.mode === 'simple' ? (
                                         <div className="space-y-4">
-                                            <div>
-                                                <span className="text-xs text-slate-400 block mb-1">Título</span>
-                                                <input 
-                                                    type="text" value={simpleData.label} 
-                                                    onChange={e => setSimpleData({...simpleData, label: e.target.value})}
-                                                    className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"
-                                                />
-                                            </div>
+                                            <div><span className="text-xs text-slate-400 block mb-1">Título</span><input type="text" value={simpleData.label} onChange={e => setSimpleData({...simpleData, label: e.target.value})} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/></div>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <span className="text-xs text-slate-400 block mb-1">Valor</span>
-                                                    <input 
-                                                        type="number" value={simpleData.value} 
-                                                        onChange={e => setSimpleData({...simpleData, value: parseFloat(e.target.value)})}
-                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs text-slate-400 block mb-1">Máximo</span>
-                                                    <input 
-                                                        type="number" value={simpleData.max} 
-                                                        onChange={e => setSimpleData({...simpleData, max: parseFloat(e.target.value)})}
-                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"
-                                                    />
-                                                </div>
+                                                <div><span className="text-xs text-slate-400 block mb-1">Valor</span><input type="number" value={simpleData.value} onChange={e => setSimpleData({...simpleData, value: parseFloat(e.target.value)})} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/></div>
+                                                <div><span className="text-xs text-slate-400 block mb-1">Máximo</span><input type="number" value={simpleData.max} onChange={e => setSimpleData({...simpleData, max: parseFloat(e.target.value)})} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/></div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-2">
-                                                <div>
-                                                    <span className="text-xs text-slate-400 block mb-1">Color 1</span>
-                                                    <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-white/10">
-                                                        <input type="color" value={simpleData.c1} onChange={e => setSimpleData({...simpleData, c1: e.target.value})} />
-                                                        <span className="text-xs font-mono text-slate-400">{simpleData.c1}</span>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs text-slate-400 block mb-1">Color 2</span>
-                                                    <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-white/10">
-                                                        <input type="color" value={simpleData.c2} onChange={e => setSimpleData({...simpleData, c2: e.target.value})} />
-                                                        <span className="text-xs font-mono text-slate-400">{simpleData.c2}</span>
-                                                    </div>
-                                                </div>
+                                                <div><span className="text-xs text-slate-400 block mb-1">Color 1</span><div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-white/10"><input type="color" value={simpleData.c1} onChange={e => setSimpleData({...simpleData, c1: e.target.value})} /></div></div>
+                                                <div><span className="text-xs text-slate-400 block mb-1">Color 2</span><div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-white/10"><input type="color" value={simpleData.c2} onChange={e => setSimpleData({...simpleData, c2: e.target.value})} /></div></div>
                                             </div>
                                         </div>
                                     ) : (
@@ -570,76 +517,48 @@
                                             {categories.map((cat) => (
                                                 <div key={cat.id} className="bg-slate-800/50 p-3 rounded-xl border border-white/5 animate-fade-in">
                                                     <div className="flex gap-2 mb-2">
-                                                        <input 
-                                                            type="text" value={cat.label} onChange={e => updateCategory(cat.id, 'label', e.target.value)}
-                                                            className="flex-1 bg-transparent border-b border-white/10 focus:border-cyan-500 outline-none text-sm pb-1"
-                                                            placeholder="Etiqueta"
-                                                        />
-                                                        <button onClick={() => removeCategory(cat.id)} className="text-slate-500 hover:text-red-400">
-                                                            <Icon name="trash" size={16} />
-                                                        </button>
+                                                        <input type="text" value={cat.label} onChange={e => updateCategory(cat.id, 'label', e.target.value)} className="flex-1 bg-transparent border-b border-white/10 focus:border-cyan-500 outline-none text-sm pb-1" placeholder="Etiqueta"/>
+                                                        <button onClick={() => removeCategory(cat.id)} className="text-slate-500 hover:text-red-400"><Icon name="trash" size={16} /></button>
                                                     </div>
                                                     <div className="flex items-center gap-3">
-                                                        <input 
-                                                            type="number" value={cat.value} onChange={e => updateCategory(cat.id, 'value', parseFloat(e.target.value)||0)}
-                                                            className="w-20 bg-slate-900 rounded px-2 py-1 text-sm text-right outline-none focus:ring-1 ring-cyan-500"
-                                                        />
-                                                        <input 
-                                                            type="color" value={cat.color} onChange={e => updateCategory(cat.id, 'color', e.target.value)} 
-                                                            className="border-none bg-transparent"
-                                                        />
+                                                        <input type="number" value={cat.value} onChange={e => updateCategory(cat.id, 'value', parseFloat(e.target.value)||0)} className="w-20 bg-slate-900 rounded px-2 py-1 text-sm text-right outline-none focus:ring-1 ring-cyan-500"/>
+                                                        <input type="color" value={cat.color} onChange={e => updateCategory(cat.id, 'color', e.target.value)} className="border-none bg-transparent"/>
                                                     </div>
                                                 </div>
                                             ))}
-                                            <button 
-                                                onClick={addCategory}
-                                                className="w-full py-2 border border-dashed border-white/20 rounded-xl text-slate-400 hover:text-white hover:border-white/40 hover:bg-white/5 transition-all flex items-center justify-center gap-2 text-sm"
-                                            >
-                                                <Icon name="plus" size={16} /> Añadir Categoría
-                                            </button>
+                                            <button onClick={addCategory} className="w-full py-2 border border-dashed border-white/20 rounded-xl text-slate-400 hover:text-white hover:border-white/40 hover:bg-white/5 transition-all flex items-center justify-center gap-2 text-sm"><Icon name="plus" size={16} /> Añadir Categoría</button>
                                         </div>
                                     )}
                                 </div>
                             </div>
-
-                            {/* Área de Visualización */}
+                            
+                            {/* Panel Visualización */}
                             <div className="lg:col-span-8 flex flex-col gap-6">
-                                <div className="glass-panel rounded-3xl p-8 md:p-12 relative flex-1 flex flex-col items-center justify-center min-h-[500px] shadow-2xl bg-gradient-to-br from-white/5 to-transparent">
-                                    {/* Fondo Decorativo */}
-                                    <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none opacity-30">
-                                        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-                                        <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4"></div>
-                                    </div>
-
-                                    {/* Contenedor del Gráfico */}
+                                <div className={`rounded-3xl p-8 md:p-12 relative flex-1 flex flex-col items-center justify-center min-h-[500px] shadow-2xl transition-all duration-500 ${exportTheme === 'dark' ? 'glass-panel bg-gradient-to-br from-white/5 to-transparent' : 'light-panel bg-gradient-to-br from-white to-slate-100'}`}>
+                                    {/* Gráfico */}
                                     <div ref={chartRef} className="relative z-10 transition-transform duration-500 hover:scale-[1.02]">
-                                        {type === 'pie' && <PieChartComponent categories={categories} />}
-                                        {type === 'ring' && <RingChart categories={categories} />}
-                                        {type === 'bar' && <BarChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} />}
-                                        {type === 'gauge' && <GaugeChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} />}
+                                        {type === 'pie' && <DonutPieChart categories={categories} theme={exportTheme} />}
+                                        {type === 'ring' && <RingChart categories={categories} theme={exportTheme} />}
+                                        {type === 'radar' && <RadarChart categories={categories} theme={exportTheme} />}
+                                        {type === 'bar' && <BarChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} theme={exportTheme} />}
+                                        {type === 'gauge' && <GaugeChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} theme={exportTheme} />}
                                     </div>
-
-                                    {/* Leyenda Automática (Solo multi) */}
-                                    {currentTypeConfig.mode === 'multi' && <Legend categories={categories} />}
-
+                                    
+                                    {/* Controles de Tema de Slide */}
+                                    <div className="absolute top-6 right-6 flex bg-black/20 p-1 rounded-full backdrop-blur-md">
+                                        <button onClick={() => setExportTheme('dark')} title="Para Slide Oscura" className={`p-2 rounded-full transition-all ${exportTheme === 'dark' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><Icon name="moon" size={16}/></button>
+                                        <button onClick={() => setExportTheme('light')} title="Para Slide Clara" className={`p-2 rounded-full transition-all ${exportTheme === 'light' ? 'bg-white text-yellow-500 shadow-md' : 'text-slate-400 hover:text-white'}`}><Icon name="sun" size={16}/></button>
+                                    </div>
+                                    <div className="absolute bottom-6 left-6 text-xs opacity-50 font-mono text-center w-full pointer-events-none">
+                                        Modo: {exportTheme === 'dark' ? 'Slide Oscura (Texto Blanco)' : 'Slide Clara (Texto Negro)'}
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-4">
-                                    <button 
-                                        onClick={() => exportChart(chartRef.current.querySelector('svg'), 'copy')}
-                                        className="glass-panel px-6 py-3 rounded-xl flex items-center gap-2 text-white hover:bg-white/10 transition-all font-semibold active:scale-95"
-                                    >
-                                        <Icon name="copy" /> Copiar para Slide
-                                    </button>
-                                    <button 
-                                        onClick={() => exportChart(chartRef.current.querySelector('svg'), 'download')}
-                                        className="bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-3 rounded-xl flex items-center gap-2 text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 hover:from-cyan-400 hover:to-blue-500 transition-all font-semibold active:scale-95"
-                                    >
-                                        <Icon name="download" /> Descargar PNG
-                                    </button>
+                                    <button onClick={() => exportChart(chartRef.current.querySelector('svg'), 'copy')} className="glass-panel px-6 py-3 rounded-xl flex items-center gap-2 text-white hover:bg-white/10 transition-all font-semibold active:scale-95"><Icon name="copy" /> Copiar Gráfico</button>
+                                    <button onClick={() => exportChart(chartRef.current.querySelector('svg'), 'download')} className="bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-3 rounded-xl flex items-center gap-2 text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 hover:from-cyan-400 hover:to-blue-500 transition-all font-semibold active:scale-95"><Icon name="download" /> Descargar PNG</button>
                                 </div>
                             </div>
-
                         </div>
                     )}
                 </div>
