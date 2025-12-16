@@ -83,7 +83,8 @@
                 plus: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
                 calculator: <><rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" /><line x1="16" y1="14" x2="16" y2="14" /><line x1="12" y1="14" x2="12" y2="14" /><line x1="8" y1="14" x2="8" y2="14" /><line x1="16" y1="18" x2="16" y2="18" /><line x1="12" y1="18" x2="12" y2="18" /><line x1="8" y1="18" x2="8" y2="18" /></>,
                 sun: <><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></>,
-                moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
+                chart: <><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -92,34 +93,29 @@
             );
         };
 
-        // --- UTILIDADES (FIXED) ---
+        // --- UTILIDADES ---
         const exportChart = async (svgElement, action = 'download') => {
             if (!svgElement) return;
 
-            // 1. Clonar y Serializar
             const serializer = new XMLSerializer();
             let source = serializer.serializeToString(svgElement);
             
-            // 2. Corregir Namespace
             if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
                 source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
             }
 
-            // 3. Estilos Inline Seguros (Sin @import externos para evitar bloqueos)
             const style = document.createElement('style');
             style.textContent = `text { font-family: 'Inter', system-ui, -apple-system, sans-serif !important; }`;
             source = source.replace(/<defs>/, '<defs>' + style.outerHTML);
 
-            // 4. Configurar Canvas
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = new Image();
             const bbox = svgElement.getBoundingClientRect();
-            const scale = 2; // Alta resolución
+            const scale = 2; 
             canvas.width = (bbox.width || 500) * scale;
             canvas.height = (bbox.height || 600) * scale;
 
-            // 5. Usar Base64 para evitar problemas de CORS/Blob
             const svgBase64 = btoa(unescape(encodeURIComponent(source)));
             const imgSource = `data:image/svg+xml;base64,${svgBase64}`;
 
@@ -197,8 +193,10 @@
 
         // --- GRÁFICOS ---
 
-        const RingChart = ({ categories, size = 400, theme }) => {
-            const total = categories.reduce((acc, curr) => acc + curr.value, 0);
+        const RingChart = ({ categories, customTotal, size = 400, theme }) => {
+            const sumValues = categories.reduce((acc, curr) => acc + curr.value, 0);
+            const total = customTotal > 0 ? customTotal : sumValues; // Usar total personalizado si existe
+            
             let currentAngle = 0;
             const radius = 100;
             const stroke = 25;
@@ -213,26 +211,54 @@
                 <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
                     <GradientDefs />
                     <g transform={`translate(0, 0)`}>
+                        {/* Pista de Fondo Completa */}
                         <circle cx={size/2} cy={size/2} r={normalizedRadius} fill="none" stroke={trackColor} strokeWidth={stroke}/>
+                        
                         {categories.map((cat, i) => {
                             if (cat.value <= 0) return null;
                             const percentage = cat.value / total;
-                            const dashArray = `${percentage * circumference} ${circumference}`;
+                            // Safe percent para no romper el dibujo
+                            const safePercent = Math.min(percentage, 1); 
+                            const dashArray = `${safePercent * circumference} ${circumference}`;
+                            
+                            // Offset: Acumulamos el ángulo. Usamos negativo para apilar en sentido horario correctamente.
+                            // rotate(-90) pone el inicio en las 12 en punto.
+                            const offset = -currentAngle; 
+                            
                             const elem = (
-                                <circle key={cat.id} cx={size/2} cy={size/2} r={normalizedRadius} fill="none" stroke={cat.color} strokeWidth={stroke} strokeDasharray={dashArray} strokeDashoffset={currentAngle * -1 + (circumference * 0.25)} strokeLinecap="round" filter="url(#glow)" transform={`rotate(-90 ${size/2} ${size/2})`} style={{ transition: 'all 0.5s ease' }}/>
+                                <circle 
+                                    key={cat.id} 
+                                    cx={size/2} 
+                                    cy={size/2} 
+                                    r={normalizedRadius} 
+                                    fill="none" 
+                                    stroke={cat.color} 
+                                    strokeWidth={stroke} 
+                                    strokeDasharray={dashArray} 
+                                    strokeDashoffset={offset} 
+                                    strokeLinecap="round" 
+                                    filter="url(#glow)" 
+                                    transform={`rotate(-90 ${size/2} ${size/2})`} 
+                                    style={{ transition: 'all 0.5s ease' }}
+                                />
                             );
-                            currentAngle += percentage * circumference;
+                            currentAngle += safePercent * circumference;
                             return elem;
                         })}
-                        <text x="50%" y={size/2} textAnchor="middle" dy="0.1em" fill={textColor} fontSize="48" fontWeight="800" style={{fontFamily: 'Inter, sans-serif'}}>{total}</text>
-                        <text x="50%" y={size/2 + 25} textAnchor="middle" fill={textColor} fillOpacity="0.5" fontSize="14" style={{fontFamily: 'Inter, sans-serif'}}>Total</text>
+                        
+                        <text x="50%" y={size/2} textAnchor="middle" dy="0.1em" fill={textColor} fontSize="48" fontWeight="800" style={{fontFamily: 'Inter, sans-serif'}}>
+                            {Math.round((sumValues / total) * 100)}%
+                        </text>
+                        <text x="50%" y={size/2 + 25} textAnchor="middle" fill={textColor} fillOpacity="0.5" fontSize="14" style={{fontFamily: 'Inter, sans-serif'}}>
+                            {sumValues} / {total}
+                        </text>
                     </g>
                     <SVGLegend categories={categories} width={size} yStart={size - 20} theme={theme} />
                 </svg>
             );
         };
 
-        const DonutPieChart = ({ categories, size = 400, theme }) => {
+        const ClassicPieChart = ({ categories, size = 400, theme }) => {
             const total = categories.reduce((acc, curr) => acc + curr.value, 0);
             let accumulatedPercent = 0;
             const legendHeight = Math.ceil(categories.length / 2) * 30 + 40;
@@ -240,7 +266,6 @@
             const scale = size / 2.5; 
             const centerX = size / 2;
             const centerY = size / 2;
-            const innerRadius = 0.6; // Hace que sea una Donut gruesa
             const textColor = theme === 'dark' ? 'white' : '#1e293b';
 
             const getCoordinates = (percent, radius) => {
@@ -256,34 +281,29 @@
                         {categories.map((cat) => {
                             if (cat.value <= 0) return null;
                             const percent = cat.value / total;
-                            const [startX, startY] = getCoordinates(accumulatedPercent, 1); // Outer
+                            const [startX, startY] = getCoordinates(accumulatedPercent, 1);
                             const [endX, endY] = getCoordinates(accumulatedPercent + percent, 1);
-                            const [innerStartX, innerStartY] = getCoordinates(accumulatedPercent + percent, innerRadius); // Inner End (reverse)
-                            const [innerEndX, innerEndY] = getCoordinates(accumulatedPercent, innerRadius); // Inner Start
                             
                             const midAngle = accumulatedPercent + percent / 2;
                             accumulatedPercent += percent;
                             
                             const largeArcFlag = percent > .5 ? 1 : 0;
-                            // Path complejo para donut segmentado
-                            // Move to outer start -> Arc to outer end -> Line to inner end -> Arc to inner start -> Close
+                            
                             const pathData = [
-                                `M ${startX} ${startY}`,
+                                `M 0 0`,
+                                `L ${startX} ${startY}`,
                                 `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
-                                `L ${innerStartX} ${innerStartY}`,
-                                `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerEndX} ${innerEndY}`,
                                 `Z`
                             ].join(' ');
 
-                            // Coordenadas para etiqueta
-                            const [labelX, labelY] = getCoordinates(midAngle, 0.8); 
+                            const [labelX, labelY] = getCoordinates(midAngle, 0.75); 
 
                             return (
                                 <g key={cat.id}>
-                                    <path d={pathData} fill={cat.color} stroke={theme === 'dark' ? '#0f172a' : '#ffffff'} strokeWidth="0.04" strokeLinejoin="round" filter="url(#glow)" style={{transition: 'd 0.5s ease'}} />
-                                    {percent > 0.08 && (
+                                    <path d={pathData} fill={cat.color} stroke={theme === 'dark' ? '#0f172a' : '#ffffff'} strokeWidth="0.02" strokeLinejoin="round" filter="url(#glow)" style={{transition: 'd 0.5s ease'}} />
+                                    {percent > 0.05 && (
                                         <g transform={`translate(${labelX}, ${labelY}) rotate(${90})`}>
-                                             <text textAnchor="middle" dy="0.3em" fill="white" fontSize="0.12" fontWeight="bold" style={{fontFamily: 'Inter, sans-serif', textShadow: '0px 1px 2px rgba(0,0,0,0.5)'}}>{Math.round(percent * 100)}%</text>
+                                             <text textAnchor="middle" dy="0.3em" fill="white" fontSize="0.14" fontWeight="bold" style={{fontFamily: 'Inter, sans-serif', textShadow: '0px 1px 3px rgba(0,0,0,0.5)'}}>{Math.round(percent * 100)}%</text>
                                         </g>
                                     )}
                                 </g>
@@ -291,6 +311,55 @@
                         })}
                     </g>
                     <SVGLegend categories={categories} width={size} yStart={size - 20} theme={theme} />
+                </svg>
+            );
+        };
+
+        const ComparativeBarChart = ({ categories, size = 400, theme }) => {
+            const maxValue = Math.max(...categories.map(c => c.value), 1);
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            const barHeight = 40;
+            const gap = 20;
+            const chartHeight = categories.length * (barHeight + gap);
+            // Ajuste: Aumentamos el height del viewBox para que quepan todos los items
+            const viewBoxHeight = Math.max(size, chartHeight + 40);
+
+            // Ancho máximo para la barra (para dejar espacio al texto)
+            // size (400) - 100 (label izq) - 60 (espacio texto valor der)
+            const maxBarWidth = size - 160; 
+
+            return (
+                <svg width={size} height={viewBoxHeight} viewBox={`0 0 ${size} ${viewBoxHeight}`}>
+                    <GradientDefs />
+                    <g transform="translate(0, 20)">
+                        {categories.map((cat, i) => {
+                            const y = i * (barHeight + gap);
+                            const width = (cat.value / maxValue) * maxBarWidth;
+                            
+                            // Coordenada X del texto del valor: 100 (inicio barra) + ancho barra + 10 (padding)
+                            const textValueX = 100 + width + 10;
+
+                            return (
+                                <g key={cat.id} transform={`translate(0, ${y})`}>
+                                    {/* Etiqueta Izquierda */}
+                                    <text x="0" y={barHeight/2} dy="0.3em" fill={textColor} fontSize="14" fontWeight="600" style={{fontFamily: 'Inter, sans-serif'}}>
+                                        {cat.label}
+                                    </text>
+                                    
+                                    {/* Fondo de Barra */}
+                                    <rect x="100" y="0" width={maxBarWidth} height={barHeight} rx={barHeight/2} fill={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
+                                    
+                                    {/* Barra de Valor */}
+                                    <rect x="100" y="0" width={width} height={barHeight} rx={barHeight/2} fill={cat.color} filter="url(#glow)" style={{transition: 'width 0.5s ease'}} />
+                                    
+                                    {/* Texto Valor */}
+                                    <text x={textValueX} y={barHeight/2} dy="0.3em" fill={textColor} fontSize="14" fontWeight="bold" style={{fontFamily: 'Inter, sans-serif'}}>
+                                        {cat.value}
+                                    </text>
+                                </g>
+                            )
+                        })}
+                    </g>
                 </svg>
             );
         };
@@ -338,7 +407,10 @@
         }
 
         const BarChart = ({ label, value, max, color1, color2, size = 400, theme }) => {
-            const percent = Math.min(100, Math.max(0, (value / max) * 100));
+            const safeMax = max > 0 ? max : 100;
+            const safeValue = value >= 0 ? value : 0;
+            const percent = Math.min(100, (safeValue / safeMax) * 100);
+            
             const textColor = theme === 'dark' ? 'white' : '#1e293b';
             const trackColor = theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
             return (
@@ -351,7 +423,7 @@
                         <filter id="glowBar"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                     </defs>
                     <text x="0" y="30" fill={textColor} fontSize="18" fontWeight="600" style={{fontFamily: 'Inter, sans-serif'}}>{label}</text>
-                    <text x={size} y="30" textAnchor="end" fill={textColor} fillOpacity="0.7" fontSize="16" style={{fontFamily: 'Inter, sans-serif'}}>{value} / {max}</text>
+                    <text x={size} y="30" textAnchor="end" fill={textColor} fillOpacity="0.7" fontSize="16" style={{fontFamily: 'Inter, sans-serif'}}>{safeValue} / {safeMax}</text>
                     <rect x="0" y="45" width={size} height="24" rx="12" fill={trackColor} />
                     <rect x="0" y="45" width={(percent / 100) * size} height="24" rx="12" fill="url(#gradBar)" filter="url(#glowBar)" style={{ transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }} />
                     <g style={{ transform: `translateX(${(percent / 100) * size}px)`, transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }}>
@@ -363,7 +435,10 @@
         };
 
         const GaugeChart = ({ label, value, max, color1, color2, size = 400, theme }) => {
-            const percent = Math.min(100, Math.max(0, (value / max) * 100));
+            const safeMax = max > 0 ? max : 100;
+            const safeValue = value >= 0 ? value : 0;
+            const percent = Math.min(100, (safeValue / safeMax) * 100);
+            
             const radius = 120;
             const stroke = 25;
             const normalizedRadius = radius - stroke;
@@ -389,7 +464,7 @@
             );
         };
 
-        // --- COMPONENTES UI (Input separado para evitar re-render y perdida de foco) ---
+        // --- COMPONENTES UI ---
         const CalcInput = ({ val, onChange }) => (
             <input type="number" value={val} onChange={e => onChange(parseFloat(e.target.value)||0)} className="bg-white/10 border-b-2 border-white/20 px-2 py-1 w-24 text-center text-cyan-300 focus:outline-none focus:border-cyan-400 font-bold" />
         );
@@ -466,34 +541,47 @@
         // --- APLICACIÓN PRINCIPAL ---
         const App = () => {
             const [tab, setTab] = useState('charts');
-            const [type, setType] = useState('pie'); // pie, ring, bar, gauge, radar
-            const [exportTheme, setExportTheme] = useState('dark'); // 'dark' | 'light'
+            const [type, setType] = useState('pie'); // pie, ring, bar, gauge, radar, comparative
+            const [exportTheme, setExportTheme] = useState('dark'); 
             const chartRef = useRef(null);
 
             const [simpleData, setSimpleData] = useState({ label: 'Ventas Totales', value: 75, max: 100, c1: '#3b82f6', c2: '#06b6d4' });
+            
+            // Estado para categorías (Multi-data)
             const [categories, setCategories] = useState([
                 { id: 1, label: 'Prod. A', value: 40, color: '#f472b6' },
                 { id: 2, label: 'Prod. B', value: 25, color: '#22d3ee' },
                 { id: 3, label: 'Servicios', value: 35, color: '#a78bfa' },
             ]);
 
+            // Nuevo: Total personalizado para gráficos de anillo
+            const [customTotal, setCustomTotal] = useState(0);
+
             const chartTypes = [
-                { id: 'pie', label: 'Torta Moderna', icon: 'pie', mode: 'multi' },
+                { id: 'pie', label: 'Torta', icon: 'pie', mode: 'multi' },
                 { id: 'ring', label: 'Anillo', icon: 'circle', mode: 'multi' },
                 { id: 'radar', label: 'Radar', icon: 'radar', mode: 'multi' },
+                { id: 'comparative', label: 'Comparativo', icon: 'chart', mode: 'multi' },
                 { id: 'bar', label: 'Barra', icon: 'bar', mode: 'simple' },
                 { id: 'gauge', label: 'Medidor', icon: 'activity', mode: 'simple' }
             ];
 
             const currentTypeConfig = chartTypes.find(t => t.id === type);
 
-            // Helpers
+            // Helpers Inputs
+            const handleSimpleChange = (field, val) => {
+                const num = val === '' ? 0 : parseFloat(val);
+                setSimpleData(prev => ({ ...prev, [field]: isNaN(num) ? 0 : num }));
+            };
+
             const addCategory = () => {
                 const newId = Math.max(...categories.map(c => c.id), 0) + 1;
                 const colors = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#818cf8'];
                 setCategories([...categories, { id: newId, label: 'Nuevo', value: 10, color: colors[Math.floor(Math.random() * colors.length)] }]);
             };
-            const updateCategory = (id, field, val) => setCategories(categories.map(c => c.id === id ? { ...c, [field]: val } : c));
+            const updateCategory = (id, field, val) => {
+                 setCategories(categories.map(c => c.id === id ? { ...c, [field]: val } : c));
+            };
             const removeCategory = (id) => categories.length > 1 && setCategories(categories.filter(c => c.id !== id));
 
             return (
@@ -510,7 +598,9 @@
                         </div>
                     </div>
 
-                    {tab === 'calc' ? <CalculatorTab /> : (
+                    {tab === 'calc' ? (
+                        <CalculatorTab />
+                    ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                             {/* Panel Izq */}
                             <div className="lg:col-span-4 space-y-6">
@@ -530,8 +620,14 @@
                                         <div className="space-y-4">
                                             <div><span className="text-xs text-slate-400 block mb-1">Título</span><input type="text" value={simpleData.label} onChange={e => setSimpleData({...simpleData, label: e.target.value})} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/></div>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div><span className="text-xs text-slate-400 block mb-1">Valor</span><input type="number" value={simpleData.value} onChange={e => setSimpleData({...simpleData, value: parseFloat(e.target.value)})} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/></div>
-                                                <div><span className="text-xs text-slate-400 block mb-1">Máximo</span><input type="number" value={simpleData.max} onChange={e => setSimpleData({...simpleData, max: parseFloat(e.target.value)})} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/></div>
+                                                <div>
+                                                    <span className="text-xs text-slate-400 block mb-1">Valor</span>
+                                                    <input type="number" value={simpleData.value} onChange={e => handleSimpleChange('value', e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs text-slate-400 block mb-1">Máximo</span>
+                                                    <input type="number" value={simpleData.max} onChange={e => handleSimpleChange('max', e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"/>
+                                                </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 pt-2">
                                                 <div><span className="text-xs text-slate-400 block mb-1">Color 1</span><div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-white/10"><input type="color" value={simpleData.c1} onChange={e => setSimpleData({...simpleData, c1: e.target.value})} /></div></div>
@@ -540,6 +636,23 @@
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
+                                            {/* Input especial para Anillo */}
+                                            {type === 'ring' && (
+                                                <div className="bg-slate-800/80 p-3 rounded-xl border border-cyan-500/30 mb-4">
+                                                    <span className="text-xs text-cyan-400 block mb-1 font-bold">Total Personalizado (Opcional)</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <input 
+                                                            type="number" 
+                                                            value={customTotal} 
+                                                            onChange={e => setCustomTotal(parseFloat(e.target.value) || 0)} 
+                                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-cyan-500"
+                                                            placeholder="0 = Automático"
+                                                        />
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 mt-1">Si es 0, usa la suma de los valores.</p>
+                                                </div>
+                                            )}
+
                                             {categories.map((cat) => (
                                                 <div key={cat.id} className="bg-slate-800/50 p-3 rounded-xl border border-white/5 animate-fade-in">
                                                     <div className="flex gap-2 mb-2">
@@ -563,9 +676,10 @@
                                 <div className={`rounded-3xl p-8 md:p-12 relative flex-1 flex flex-col items-center justify-center min-h-[500px] shadow-2xl transition-all duration-500 ${exportTheme === 'dark' ? 'glass-panel bg-gradient-to-br from-white/5 to-transparent' : 'light-panel bg-gradient-to-br from-white to-slate-100'}`}>
                                     {/* Gráfico */}
                                     <div ref={chartRef} className="relative z-10 transition-transform duration-500 hover:scale-[1.02]">
-                                        {type === 'pie' && <DonutPieChart categories={categories} theme={exportTheme} />}
-                                        {type === 'ring' && <RingChart categories={categories} theme={exportTheme} />}
+                                        {type === 'pie' && <ClassicPieChart categories={categories} theme={exportTheme} />}
+                                        {type === 'ring' && <RingChart categories={categories} customTotal={customTotal} theme={exportTheme} />}
                                         {type === 'radar' && <RadarChart categories={categories} theme={exportTheme} />}
+                                        {type === 'comparative' && <ComparativeBarChart categories={categories} theme={exportTheme} />}
                                         {type === 'bar' && <BarChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} theme={exportTheme} />}
                                         {type === 'gauge' && <GaugeChart {...simpleData} color1={simpleData.c1} color2={simpleData.c2} theme={exportTheme} />}
                                     </div>
