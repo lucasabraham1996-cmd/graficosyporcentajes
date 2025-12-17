@@ -73,7 +73,10 @@
                 star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
                 dollar: <><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>,
                 user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
-                check: <polyline points="20 6 9 17 4 12" />
+                check: <polyline points="20 6 9 17 4 12" />,
+                paste: <><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></>,
+                x: <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>,
+                image: <><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -143,7 +146,7 @@
             );
         };
 
-        const SVGLegend = ({ categories, width, yStart, theme }) => {
+        const SVGLegend = ({ categories, width, yStart, theme, showPercent, total }) => {
             const itemHeight = 30;
             const colWidth = width / 2;
             const textColor = theme === 'dark' ? 'white' : '#1e293b';
@@ -151,13 +154,16 @@
             return (
                 <g transform={`translate(0, ${yStart})`}>
                     {categories.map((cat, i) => {
-                        const x = (i % 2) * colWidth + 40;
+                        const x = (i % 2) * colWidth + 20;
                         const y = Math.floor(i / 2) * itemHeight;
+                        const val = parseFloat(cat.value) || 0;
+                        const percentStr = showPercent && total > 0 ? ` (${Math.round((val/total)*100)}%)` : '';
+
                         return (
                             <g key={cat.id} transform={`translate(${x}, ${y})`}>
                                 <circle r="6" fill={cat.color} cy="-5" />
                                 <text x="15" y="0" fill={textColor} fontSize="14" fontWeight="500" style={{fontFamily: 'Inter, sans-serif'}}>
-                                    {cat.label}: <tspan fontWeight="bold" fillOpacity="0.7">{cat.value}</tspan>
+                                    {cat.label}: <tspan fontWeight="bold" fillOpacity="0.7">{cat.value}{percentStr}</tspan>
                                 </text>
                             </g>
                         );
@@ -168,15 +174,20 @@
 
         // --- COMPONENTES GRÁFICOS ---
 
-        // ARROW PIE CHART (Torta con Flechas)
-        const ArrowPieChart = ({ categories, size = 400, theme, title, centerColor, centerIcon }) => {
+        // ARROW PIE CHART (AJUSTADO PARA QUE ENTRE TODO)
+        const ArrowPieChart = ({ categories, size = 400, theme, title, centerColor, centerIcon, centerImage }) => {
             const total = categories.reduce((acc, curr) => acc + (parseFloat(curr.value)||0), 0);
             const maxValue = Math.max(...categories.map(c => parseFloat(c.value)||0), 1);
             let accumulatedPercent = 0;
             
-            const baseScale = size / 3.8; 
+            // Reduced scale even further so labels and arrows fit nicely
+            const baseScale = size / 4.5; 
+            
+            const titleHeight = title ? 60 : 30;
+            const totalHeight = size + titleHeight;
             const centerX = size / 2;
-            const centerY = size / 2;
+            const centerY = size / 2 + (titleHeight/2);
+            
             const textColor = theme === 'dark' ? 'white' : '#1e293b';
 
             const getCoordinates = (percent, radius) => {
@@ -186,8 +197,9 @@
             };
 
             return (
-                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
                     <GradientDefs />
+                    <ChartTitle title={title} width={size} theme={theme} y={30} />
                     <defs>
                         {categories.map((cat) => (
                             <linearGradient key={cat.id} id={`pieGrad_${cat.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -208,20 +220,38 @@
                                 if (val <= 0) return null;
                                 const percent = val / total;
                                 const relativeSize = val / maxValue; 
-                                const radius = 1.0 + (relativeSize * 0.3);
+                                
+                                // Radius varies less to keep chart compact
+                                const radius = 1.0 + (relativeSize * 0.2);
+                                
                                 const startPercent = accumulatedPercent;
                                 const endPercent = accumulatedPercent + percent;
+                                
                                 const [startX, startY] = getCoordinates(startPercent, radius * baseScale);
                                 const [endX, endY] = getCoordinates(endPercent, radius * baseScale);
+                                
                                 const midAngle = accumulatedPercent + percent / 2;
                                 accumulatedPercent += percent;
+                                
                                 const largeArcFlag = percent > .5 ? 1 : 0;
+                                
                                 const pathData = [`M 0 0`, `L ${startX} ${startY}`, `A ${radius * baseScale} ${radius * baseScale} 0 ${largeArcFlag} 1 ${endX} ${endY}`, `Z`].join(' ');
+
                                 const [edgeX, edgeY] = getCoordinates(midAngle, radius * baseScale);
-                                const arrowLen = 35; 
+                                // Shorter arrow length relative to circle
+                                const arrowLen = 25; 
                                 const [arrowEndX, arrowEndY] = getCoordinates(midAngle, (radius * baseScale) + arrowLen);
+                                
                                 const currentAngleDeg = (midAngle * 360) - 90;
-                                const isLeft = currentAngleDeg > 90 && currentAngleDeg < 270;
+                                // Simple logic to determine text side
+                                // 0 to 180 is Right side (since -90 rotation makes 0 top) -> actually 0 to 0.5 percent
+                                // Wait, simple X coordinate check is safer after rotation
+                                
+                                // Calculate unrotated X to determine side
+                                const realX = arrowEndX; // relative to center, rotated by parent group? No, parent is rotated.
+                                
+                                // We need text anchor logic based on angle
+                                const isLeft = (midAngle > 0.5);
 
                                 return (
                                     <g key={cat.id}>
@@ -229,7 +259,16 @@
                                         <line x1={edgeX} y1={edgeY} x2={arrowEndX} y2={arrowEndY} stroke={textColor} strokeOpacity="0.5" strokeWidth="1.5" />
                                         <circle cx={edgeX} cy={edgeY} r="3" fill={cat.color} />
                                         <g transform={`translate(${arrowEndX}, ${arrowEndY}) rotate(90)`}>
-                                            <text x={isLeft ? -5 : 5} y={0} dy="0.3em" textAnchor={isLeft ? "end" : "start"} fill={textColor} fontSize="14" fontWeight="700" style={{fontFamily: 'Inter, sans-serif'}}>
+                                            <text 
+                                                x={isLeft ? -5 : 5} 
+                                                y={0}
+                                                dy="0.3em" 
+                                                textAnchor={isLeft ? "end" : "start"} 
+                                                fill={textColor} 
+                                                fontSize="14" 
+                                                fontWeight="700" 
+                                                style={{fontFamily: 'Inter, sans-serif'}}
+                                            >
                                                 {cat.label} ({Math.round(percent * 100)}%)
                                             </text>
                                         </g>
@@ -239,7 +278,11 @@
                         </g>
                         <circle cx="0" cy="0" r={baseScale * 0.5} fill="url(#centerGrad)" filter="url(#glow)" />
                         <circle cx="0" cy="0" r={baseScale * 0.45} fill="none" stroke={centerColor} strokeWidth="2" opacity="0.5" />
-                        {title ? (
+                        
+                        {/* Center Content */}
+                        {centerImage ? (
+                            <image href={centerImage} x={-baseScale * 0.25} y={-baseScale * 0.25} width={baseScale * 0.5} height={baseScale * 0.5} preserveAspectRatio="xMidYMid slice" clipPath="circle(50%)" />
+                        ) : title ? (
                             <text y="5" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" style={{fontFamily: 'Inter', textTransform:'uppercase'}}>{title.substring(0,8)}</text>
                         ) : (
                             <g transform="translate(-10, -10)" stroke="white" strokeWidth="2">
@@ -255,116 +298,12 @@
             );
         };
 
-        // PROCESS SMART CHART (Proceso con Adaptación de Altura)
-        const ProcessSmartChart = ({ categories, size = 400, theme, title }) => {
-            const gap = 30;
-            const textColor = theme === 'dark' ? 'white' : '#1e293b';
-            
-            // Calculate dynamic positions
-            let currentY = 60;
-            const items = categories.map((cat) => {
-                const text = cat.value || "";
-                const charsPerLine = 40; // Approx
-                const lines = Math.ceil(text.length / charsPerLine) || 1;
-                const height = Math.max(60, 40 + (lines * 20)); // Base 60 + 20 per extra line
-                const pos = currentY;
-                currentY += height + gap;
-                return { ...cat, height, y: pos };
-            });
-            
-            const totalHeight = currentY + 30;
-
-            return (
-                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
-                    <GradientDefs />
-                    <ChartTitle title={title} width={size} theme={theme} />
-                    <g transform="translate(0, 0)">
-                        {items.map((cat, i) => {
-                            const isLast = i === items.length - 1;
-                            const nextY = isLast ? 0 : items[i+1].y;
-                            
-                            return (
-                                <g key={cat.id} transform={`translate(20, ${cat.y})`}>
-                                    {/* Line connecting to next */}
-                                    {!isLast && <line x1="25" y1={cat.height} x2="25" y2={cat.height + gap} stroke={cat.color} strokeWidth="2" strokeDasharray="4" />}
-                                    
-                                    <circle cx="25" cy={cat.height/2} r="20" fill={cat.color} filter="url(#glow)" />
-                                    <text x="25" y={cat.height/2} dy="0.3em" textAnchor="middle" fill="white" fontWeight="bold">{i+1}</text>
-                                    
-                                    {/* Filled Card with foreignObject for text wrapping */}
-                                    <rect x="60" y="0" width={size - 80} height={cat.height} rx="10" fill={cat.color} fillOpacity="0.15" stroke={cat.color} strokeOpacity="0.5" />
-                                    
-                                    <foreignObject x="75" y="10" width={size - 130} height={cat.height - 20}>
-                                        <div xmlns="http://www.w3.org/1999/xhtml" style={{display:'flex', flexDirection:'column', justifyContent:'center', height:'100%', color: textColor, fontFamily: 'Inter, sans-serif'}}>
-                                            <div style={{fontWeight:'bold', fontSize:'16px', lineHeight:'1.2', marginBottom:'4px'}}>{cat.label}</div>
-                                            <div style={{fontSize:'13px', opacity:0.8, lineHeight:'1.3', wordWrap: 'break-word'}}>{cat.value}</div>
-                                        </div>
-                                    </foreignObject>
-                                </g>
-                            )
-                        })}
-                    </g>
-                </svg>
-            );
-        };
-
-        // CYCLE SMART CHART (Ciclo con burbujas adaptables)
-        const CycleSmartChart = ({ categories, size = 400, theme, title, centerLabel }) => {
-            // Determine sizing based on max text length
-            const maxTextLen = Math.max(...categories.map(c => (c.value || "").length));
-            const bubbleRadius = Math.max(45, 30 + Math.sqrt(maxTextLen) * 5); // Grow bubble with text
-            const layoutRadius = Math.max(130, size/2 * 0.5 + (bubbleRadius - 45)); // Push out if bubbles grow
-            
-            const centerX = size / 2;
-            const centerY = size / 2 + 20;
-            const textColor = theme === 'dark' ? 'white' : '#1e293b';
-            
-            // Adjust viewBox to ensure everything fits
-            const totalSize = (layoutRadius + bubbleRadius) * 2 + 60;
-            const viewBoxStart = centerX - totalSize/2;
-
-            return (
-                <svg width={size} height={totalSize} viewBox={`${viewBoxStart} ${centerY - totalSize/2} ${totalSize} ${totalSize}`}>
-                    <GradientDefs />
-                    {/* Render title manually at top relative to new viewBox */}
-                    {title && <text x={centerX} y={centerY - totalSize/2 + 40} textAnchor="middle" fill={textColor} fontSize="24" fontWeight="900" style={{fontFamily: 'Inter, sans-serif', textTransform: 'uppercase'}}>{title}</text>}
-                    
-                    <g transform={`translate(${centerX}, ${centerY})`}>
-                        <circle r="45" fill={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} stroke={textColor} strokeOpacity="0.2" />
-                        <text dy="0.3em" textAnchor="middle" fill={textColor} fontSize="12" fontWeight="bold">{centerLabel || "CICLO"}</text>
-
-                        {categories.map((cat, i) => {
-                            const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
-                            const x = Math.cos(angle) * layoutRadius;
-                            const y = Math.sin(angle) * layoutRadius;
-                            
-                            return (
-                                <g key={cat.id}>
-                                    <line x1="0" y1="0" x2={x} y2={y} stroke={cat.color} strokeWidth="1" strokeOpacity="0.5" />
-                                    <circle cx={x} cy={y} r={bubbleRadius} fill={cat.color} fillOpacity="0.2" stroke={cat.color} strokeWidth="2" filter="url(#glow)" />
-                                    
-                                    {/* ForeignObject centered on x,y */}
-                                    <foreignObject x={x - bubbleRadius + 10} y={y - bubbleRadius + 10} width={bubbleRadius * 2 - 20} height={bubbleRadius * 2 - 20}>
-                                        <div xmlns="http://www.w3.org/1999/xhtml" style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color: textColor, textAlign:'center', lineHeight:'1.2'}}>
-                                            <span style={{fontWeight:'bold', fontSize:'12px', marginBottom:'4px'}}>{cat.label}</span>
-                                            <span style={{opacity:0.9, fontSize:'11px', wordWrap:'break-word'}}>{cat.value}</span>
-                                        </div>
-                                    </foreignObject>
-                                </g>
-                            );
-                        })}
-                    </g>
-                </svg>
-            );
-        };
-
-        // RING CHART (Corrección Fundamental: Parsing Seguro)
-        const RingChart = ({ categories, customTotal, size = 400, theme, title }) => {
-            // Parse values safely to 0 if NaN (text input)
+        // RING CHART (Center Alignment Fixed + Percentages in Legend)
+        const RingChart = ({ categories, customTotal, size = 400, theme, title, centerLabel, centerImage }) => {
             const safeCategories = categories.map(c => ({...c, value: parseFloat(c.value) || 0}));
             const sumValues = safeCategories.reduce((acc, curr) => acc + curr.value, 0);
             const total = customTotal > 0 ? customTotal : sumValues; 
-            const safeTotal = total > 0 ? total : 1; // Prevent division by zero
+            const safeTotal = total > 0 ? total : 1; 
 
             let currentAngle = 0;
             const radius = 130; 
@@ -374,6 +313,10 @@
             const totalHeight = size + 60;
             const textColor = theme === 'dark' ? 'white' : '#1e293b';
             const trackColor = theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+            // Center content logic
+            const centerMainText = centerLabel ? centerLabel : `${Math.round((sumValues / safeTotal) * 100)}%`;
+            const centerSubText = `${sumValues} / ${total}`;
 
             return (
                 <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
@@ -391,14 +334,151 @@
                             currentAngle += safePercent * circumference;
                             return elem;
                         })}
-                        <text x="50%" y={size/2} textAnchor="middle" dy="0.1em" fill={textColor} fontSize="56" fontWeight="800" style={{fontFamily: 'Inter'}}>{Math.round((sumValues / safeTotal) * 100)}%</text>
+                        
+                        {centerImage ? (
+                             <image href={centerImage} x={(size/2)-40} y={(size/2)-40} width="80" height="80" preserveAspectRatio="xMidYMid slice" clipPath="circle(50%)" />
+                        ) : (
+                            <>
+                                {/* Use dominant-baseline central for perfect centering */}
+                                <text x="50%" y={size/2} dy="-0.2em" textAnchor="middle" dominantBaseline="central" fill={textColor} fontSize="56" fontWeight="800" style={{fontFamily: 'Inter'}}>{centerMainText}</text>
+                                <text x="50%" y={size/2} dy="1.8em" textAnchor="middle" dominantBaseline="central" fill={textColor} fillOpacity="0.5" fontSize="16" style={{fontFamily: 'Inter'}}>{centerSubText}</text>
+                            </>
+                        )}
                     </g>
-                    <SVGLegend categories={safeCategories} width={size} yStart={size + 20} theme={theme} />
+                    <SVGLegend categories={safeCategories} width={size} yStart={size + 20} theme={theme} showPercent={true} total={safeTotal} />
                 </svg>
             );
         };
 
-        // --- RESTO DE GRÁFICOS (Pyramid, Position, Radar, Bar, Gauge) ---
+        // PROCESS SMART CHART
+        const ProcessSmartChart = ({ categories, size = 400, theme, title }) => {
+            const gap = 30;
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            
+            let currentY = 60;
+            const items = categories.map((cat) => {
+                const text = cat.value || "";
+                const charsPerLine = 40; 
+                const lines = Math.ceil(text.length / charsPerLine) || 1;
+                const height = Math.max(60, 40 + (lines * 20)); 
+                const pos = currentY;
+                currentY += height + gap;
+                return { ...cat, height, y: pos };
+            });
+            
+            const totalHeight = currentY + 30;
+
+            return (
+                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
+                    <GradientDefs />
+                    <ChartTitle title={title} width={size} theme={theme} />
+                    <g transform="translate(0, 0)">
+                        {items.map((cat, i) => {
+                            const isLast = i === items.length - 1;
+                            return (
+                                <g key={cat.id} transform={`translate(20, ${cat.y})`}>
+                                    {!isLast && <line x1="25" y1={cat.height} x2="25" y2={cat.height + gap} stroke={cat.color} strokeWidth="2" strokeDasharray="4" />}
+                                    <circle cx="25" cy={cat.height/2} r="20" fill={cat.color} filter="url(#glow)" />
+                                    <text x="25" y={cat.height/2} dy="0.3em" textAnchor="middle" fill="white" fontWeight="bold">{i+1}</text>
+                                    <rect x="60" y="0" width={size - 80} height={cat.height} rx="10" fill={cat.color} fillOpacity="0.15" stroke={cat.color} strokeOpacity="0.5" />
+                                    <foreignObject x="75" y="10" width={size - 130} height={cat.height - 20}>
+                                        <div xmlns="http://www.w3.org/1999/xhtml" style={{display:'flex', flexDirection:'column', justifyContent:'center', height:'100%', color: textColor, fontFamily: 'Inter, sans-serif'}}>
+                                            <div style={{fontWeight:'bold', fontSize:'16px', lineHeight:'1.2', marginBottom:'4px'}}>{cat.label}</div>
+                                            <div style={{fontSize:'13px', opacity:0.8, lineHeight:'1.3', wordWrap: 'break-word', overflowWrap: 'anywhere'}}>{cat.value}</div>
+                                        </div>
+                                    </foreignObject>
+                                </g>
+                            )
+                        })}
+                    </g>
+                </svg>
+            );
+        };
+
+        // CYCLE SMART CHART
+        const CycleSmartChart = ({ categories, size = 400, theme, title, centerLabel }) => {
+            const maxTextLen = Math.max(...categories.map(c => (c.value || "").length));
+            const bubbleRadius = Math.max(45, 30 + Math.sqrt(maxTextLen) * 5); 
+            const layoutRadius = Math.max(130, size/2 * 0.5 + (bubbleRadius - 45)); 
+            
+            const centerX = size / 2;
+            const centerY = size / 2 + 20;
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            
+            const totalSize = (layoutRadius + bubbleRadius) * 2 + 60;
+            const viewBoxStart = centerX - totalSize/2;
+
+            return (
+                <svg width={size} height={totalSize} viewBox={`${viewBoxStart} ${centerY - totalSize/2} ${totalSize} ${totalSize}`}>
+                    <GradientDefs />
+                    {title && <text x={centerX} y={centerY - totalSize/2 + 40} textAnchor="middle" fill={textColor} fontSize="24" fontWeight="900" style={{fontFamily: 'Inter, sans-serif', textTransform: 'uppercase'}}>{title}</text>}
+                    <g transform={`translate(${centerX}, ${centerY})`}>
+                        <circle r="45" fill={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} stroke={textColor} strokeOpacity="0.2" />
+                        <text dy="0.3em" textAnchor="middle" fill={textColor} fontSize="12" fontWeight="bold">{centerLabel || "CICLO"}</text>
+                        {categories.map((cat, i) => {
+                            const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+                            const x = Math.cos(angle) * layoutRadius;
+                            const y = Math.sin(angle) * layoutRadius;
+                            
+                            return (
+                                <g key={cat.id}>
+                                    <line x1="0" y1="0" x2={x} y2={y} stroke={cat.color} strokeWidth="1" strokeOpacity="0.5" />
+                                    <circle cx={x} cy={y} r={bubbleRadius} fill={cat.color} fillOpacity="0.2" stroke={cat.color} strokeWidth="2" filter="url(#glow)" />
+                                    <foreignObject x={x - bubbleRadius + 10} y={y - bubbleRadius + 10} width={bubbleRadius * 2 - 20} height={bubbleRadius * 2 - 20}>
+                                        <div xmlns="http://www.w3.org/1999/xhtml" style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color: textColor, textAlign:'center', lineHeight:'1.2'}}>
+                                            <span style={{fontWeight:'bold', fontSize:'12px', marginBottom:'4px'}}>{cat.label}</span>
+                                            <span style={{opacity:0.9, fontSize:'11px', wordWrap:'break-word', overflowWrap: 'anywhere'}}>{cat.value}</span>
+                                        </div>
+                                    </foreignObject>
+                                </g>
+                            );
+                        })}
+                    </g>
+                </svg>
+            );
+        };
+
+        // TABLE POSITIONS (Fixed Overlap)
+        const PositionTableChart = ({ categories, size = 400, theme, title }) => {
+            const sortedCats = [...categories].sort((a, b) => (parseFloat(b.value)||0) - (parseFloat(a.value)||0));
+            const maxValue = Math.max(...categories.map(c => parseFloat(c.value)||0), 1);
+            const barHeight = 50;
+            const gap = 15;
+            const totalHeight = categories.length * (barHeight + gap) + 60; 
+            const textColor = theme === 'dark' ? 'white' : '#1e293b';
+            const trackColor = theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+            
+            // Increased left margin to 80 to avoid overlap with rank number
+            const contentStartX = 80;
+
+            return (
+                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
+                    <GradientDefs />
+                    <ChartTitle title={title} width={size} theme={theme} />
+                    <g transform={`translate(0, 60)`}>
+                        {sortedCats.map((cat, i) => {
+                            const y = i * (barHeight + gap);
+                            const val = parseFloat(cat.value) || 0;
+                            const percent = (val / maxValue);
+                            const width = percent * (size - contentStartX - 80); // Adjusted width calc
+                            return (
+                                <g key={cat.id} transform={`translate(20, ${y})`}>
+                                    <text x="0" y="38" fontSize="32" fontWeight="900" fill={cat.color} style={{fontFamily: 'Inter'}}>#{i + 1}</text>
+                                    <g transform={`translate(${contentStartX}, 0)`}>
+                                        <text x="0" y="15" fill={textColor} fontSize="14" fontWeight="600">{cat.label}</text>
+                                        <text x={size - contentStartX - 40} y="32" textAnchor="end" fill={cat.color} fontSize="14" fontWeight="bold">{cat.value}</text>
+                                        <rect x="0" y="25" width={size - contentStartX - 60} height="8" rx="4" fill={trackColor} />
+                                        <rect x="0" y="25" width={width} height="8" rx="4" fill={cat.color} filter="url(#glow)" />
+                                    </g>
+                                </g>
+                            )
+                        })}
+                    </g>
+                </svg>
+            );
+        };
+
+        // --- OTROS (Pyramid, Radar, Comparative, Bar, Gauge) ---
         const PyramidSmartChart = ({ categories, size = 400, theme, title }) => {
             const sorted = [...categories].sort((a,b) => (parseFloat(a.value)||0) - (parseFloat(b.value)||0)); 
             const heightStep = (size - 60) / categories.length;
@@ -424,48 +504,12 @@
             );
         };
 
-        const PositionTableChart = ({ categories, size = 400, theme, title }) => {
-            const sortedCats = [...categories].sort((a, b) => (parseFloat(b.value)||0) - (parseFloat(a.value)||0));
-            const maxValue = Math.max(...categories.map(c => parseFloat(c.value)||0), 1);
-            const barHeight = 50;
-            const gap = 15;
-            const totalHeight = categories.length * (barHeight + gap) + 60; 
-            const textColor = theme === 'dark' ? 'white' : '#1e293b';
-            const trackColor = theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
-            return (
-                <svg width={size} height={totalHeight} viewBox={`0 0 ${size} ${totalHeight}`}>
-                    <GradientDefs />
-                    <ChartTitle title={title} width={size} theme={theme} />
-                    <g transform={`translate(0, 60)`}>
-                        {sortedCats.map((cat, i) => {
-                            const y = i * (barHeight + gap);
-                            const val = parseFloat(cat.value) || 0;
-                            const percent = (val / maxValue);
-                            const width = percent * (size - 140);
-                            return (
-                                <g key={cat.id} transform={`translate(20, ${y})`}>
-                                    <text x="0" y="38" fontSize="32" fontWeight="900" fill={cat.color} style={{fontFamily: 'Inter'}}>#{i + 1}</text>
-                                    <g transform="translate(60, 0)">
-                                        <text x="0" y="15" fill={textColor} fontSize="14" fontWeight="600">{cat.label}</text>
-                                        <text x={size - 100} y="32" textAnchor="end" fill={cat.color} fontSize="14" fontWeight="bold">{cat.value}</text>
-                                        <rect x="0" y="25" width={size - 120} height="8" rx="4" fill={trackColor} />
-                                        <rect x="0" y="25" width={width} height="8" rx="4" fill={cat.color} filter="url(#glow)" />
-                                    </g>
-                                </g>
-                            )
-                        })}
-                    </g>
-                </svg>
-            );
-        };
-
         const RadarChart = ({ categories, size = 400, theme, title }) => {
             const maxValue = Math.max(...categories.map(c => parseFloat(c.value)||0), 1);
             const titleHeight = title ? 50 : 0;
             const radius = size / 2 - 60;
             const centerX = size / 2;
             const centerY = size / 2;
-            const angleSlice = (Math.PI * 2) / categories.length;
             const totalHeight = size + titleHeight;
             const gridColor = theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
             const points = categories.map((cat, i) => {
@@ -486,7 +530,7 @@
                             }).map(p => p.join(',')).join(' ');
                             return <polygon key={l} points={levelPoints} fill="none" stroke={gridColor} strokeWidth="1" />;
                         })}
-                        {categories.map((_, i) => { const angle = i * angleSlice - Math.PI / 2; return <line key={i} x1={centerX} y1={centerY} x2={centerX + Math.cos(angle) * radius} y2={centerY + Math.sin(angle) * radius} stroke={gridColor} />; })}
+                        {categories.map((_, i) => { const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2; return <line key={i} x1={centerX} y1={centerY} x2={centerX + Math.cos(angle) * radius} y2={centerY + Math.sin(angle) * radius} stroke={gridColor} />; })}
                         <polygon points={points} fill="rgba(6, 182, 212, 0.4)" stroke="#22d3ee" strokeWidth="2" filter="url(#glow)"/>
                         {categories.map((cat, i) => { const angle = i * angleSlice - Math.PI / 2; const r = ((parseFloat(cat.value)||0) / maxValue) * radius; return <circle key={i} cx={centerX + Math.cos(angle) * r} cy={centerY + Math.sin(angle) * r} r="4" fill={cat.color} stroke="white" strokeWidth="1" />; })}
                     </g>
@@ -584,6 +628,49 @@
             );
         };
 
+        const PasteModal = ({ onClose, onPaste, onImagePaste }) => {
+            const [text, setText] = useState("");
+            
+            const handlePaste = (e) => {
+                const items = e.clipboardData.items;
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf("image") !== -1) {
+                        const blob = items[i].getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            onImagePaste(event.target.result);
+                        };
+                        reader.readAsDataURL(blob);
+                        e.preventDefault();
+                        return; // Stop if image found
+                    }
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="glass-panel p-6 rounded-2xl w-full max-w-lg relative bg-slate-900 border border-white/20 shadow-2xl">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white"><Icon name="x" size={20}/></button>
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Icon name="paste" /> Pegado Inteligente</h3>
+                        <p className="text-sm text-slate-300 mb-3">Pega tus datos (Excel/Texto) o <b>una imagen</b> directamente aquí (Ctrl+V).</p>
+                        <textarea 
+                            value={text} 
+                            onChange={e=>setText(e.target.value)} 
+                            onPaste={handlePaste}
+                            className="w-full h-40 bg-black/30 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-cyan-500 outline-none mb-4 font-mono"
+                            placeholder="Ejemplo Datos:\nProducto A\t100\nProducto B\t200\n\nO pega una imagen..."
+                        />
+                        <button 
+                            onClick={() => onPaste(text)}
+                            className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl font-bold text-white shadow-lg hover:shadow-cyan-500/20 active:scale-95 transition-all"
+                        >
+                            Procesar Datos
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
         // --- APP ---
         const App = () => {
             const [tab, setTab] = useState('charts');
@@ -592,11 +679,12 @@
             const [chartTitle, setChartTitle] = useState("");
             const [centerColor, setCenterColor] = useState("#3b82f6");
             const [centerIcon, setCenterIcon] = useState("pie");
-            const [centerLabel, setCenterLabel] = useState("CICLO"); // Nuevo estado para Ciclo
+            const [centerLabel, setCenterLabel] = useState("CICLO");
+            const [centerImage, setCenterImage] = useState(null); 
+            const [showPasteModal, setShowPasteModal] = useState(false);
             const chartRef = useRef(null);
 
             const [simpleData, setSimpleData] = useState({ label: 'Ventas', value: 75, max: 100, c1: '#3b82f6', c2: '#06b6d4' });
-            // Valor es string por defecto para permitir texto en Smart charts
             const [categories, setCategories] = useState([{ id: 1, label: 'Prod A', value: "40", color: '#f472b6' }, { id: 2, label: 'Prod B', value: "25", color: '#22d3ee' }, { id: 3, label: 'Serv C', value: "35", color: '#a78bfa' }]);
             const [customTotal, setCustomTotal] = useState(0);
 
@@ -616,8 +704,70 @@
             const updateCategory = (id, f, v) => setCategories(categories.map(c => c.id===id ? {...c, [f]:v} : c));
             const removeCategory = (id) => categories.length > 1 && setCategories(categories.filter(c => c.id!==id));
 
+            const getRandomColor = () => {
+                const colors = ['#f472b6', '#22d3ee', '#a78bfa', '#f87171', '#fbbf24', '#34d399', '#60a5fa', '#818cf8', '#e879f9'];
+                return colors[Math.floor(Math.random() * colors.length)];
+            };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => { setCenterImage(reader.result); };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleSmartPasteImage = (imgData) => {
+                setCenterImage(imgData);
+                setShowPasteModal(false);
+                alert("¡Imagen pegada correctamente!");
+            };
+
+            const handleSmartPaste = (text) => {
+                if (!text.trim()) return;
+                const rows = text.trim().split(/\r?\n/);
+                
+                if (currentTypeConfig.mode === 'multi') {
+                    const newCats = rows.map((row, i) => {
+                        const parts = row.split(/\t|,|;/);
+                        let label = parts[0] ? parts[0].trim() : `Item ${i+1}`;
+                        let rawVal = parts[1] ? parts[1].trim() : "0";
+
+                        const isFirstNum = !isNaN(parseFloat(label)) && isFinite(label);
+                        const isSecondNum = !isNaN(parseFloat(rawVal)) && isFinite(rawVal);
+
+                        if (isFirstNum && !isSecondNum) {
+                            const temp = label;
+                            label = rawVal;
+                            rawVal = temp;
+                        }
+
+                        const color = getRandomColor();
+                        return { id: i + 1, label, value: rawVal, color };
+                    }).filter(c => c.label !== "");
+                    
+                    if (newCats.length > 0) {
+                        setCategories(newCats);
+                        setShowPasteModal(false);
+                        alert(`¡Importado! Se cargaron ${newCats.length} categorías.`);
+                    }
+                } else {
+                    const firstRow = rows[0].split(/\t|,|;/);
+                    if (firstRow.length >= 2) {
+                        const val = parseFloat(firstRow[1]) || 0;
+                        const max = parseFloat(firstRow[2]) || 100;
+                        setSimpleData({ ...simpleData, label: firstRow[0].trim(), value: val, max: max });
+                        setShowPasteModal(false);
+                        alert("¡Datos importados!");
+                    }
+                }
+            };
+
             return (
                 <div className="max-w-7xl mx-auto p-4 md:p-8">
+                    {showPasteModal && <PasteModal onClose={() => setShowPasteModal(false)} onPaste={handleSmartPaste} onImagePaste={handleSmartPasteImage} />}
+                    
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-10">
                         <div>
                             <h1 className="text-5xl font-black tracking-tighter bg-gradient-to-r from-cyan-400 via-white to-purple-400 bg-clip-text text-transparent">GlassGraph</h1>
@@ -655,14 +805,43 @@
                                             <label className="text-xs font-bold text-slate-400 mb-2 block">CENTRO TORTA</label>
                                             <div className="flex items-center gap-2 mb-3">
                                                 <input type="color" value={centerColor} onChange={e=>setCenterColor(e.target.value)} />
-                                                <span className="text-xs text-slate-500">Color</span>
+                                                <span className="text-xs text-slate-500">Color Fondo</span>
                                             </div>
-                                            <div className="flex gap-2 justify-between">
+                                            <div className="flex gap-2 justify-between mb-3">
                                                 {['pie', 'star', 'dollar', 'user', 'check'].map(ic => (
-                                                    <button key={ic} onClick={()=>setCenterIcon(ic)} className={`p-2 rounded-lg border ${centerIcon===ic ? 'bg-cyan-500/20 border-cyan-500' : 'border-white/10 hover:bg-white/5'}`}>
+                                                    <button key={ic} onClick={()=>{setCenterIcon(ic); setCenterImage(null);}} className={`p-2 rounded-lg border ${centerIcon===ic && !centerImage ? 'bg-cyan-500/20 border-cyan-500' : 'border-white/10 hover:bg-white/5'}`}>
                                                         <Icon name={ic} size={16} />
                                                     </button>
                                                 ))}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="text-xs text-slate-500">O subir imagen:</label>
+                                                    {centerImage && <button onClick={()=>setCenterImage(null)} className="text-red-400 hover:text-red-300 text-[10px] uppercase font-bold flex items-center gap-1"><Icon name="trash" size={10} /> Borrar</button>}
+                                                </div>
+                                                <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-slate-400 w-full" />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Config Especial Anillo */}
+                                    {type === 'ring' && (
+                                        <div className="mb-6 p-3 bg-slate-800/50 rounded-xl border border-white/5">
+                                            <label className="text-xs font-bold text-slate-400 mb-2 block">OPCIONES ANILLO</label>
+                                            <div className="mb-2">
+                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Título Centro (Opcional)</span>
+                                                <input type="text" value={centerLabel} onChange={e=>setCenterLabel(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm mt-1" placeholder="Ej. 100%" />
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Total Personalizado</span>
+                                                <input type="number" value={customTotal} onChange={e=>setCustomTotal(parseFloat(e.target.value)||0)} className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm mt-1" placeholder="0 = Auto" />
+                                            </div>
+                                            <div className="mt-2">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Imagen Centro</span>
+                                                    {centerImage && <button onClick={()=>setCenterImage(null)} className="text-red-400 hover:text-red-300 text-[10px] uppercase font-bold flex items-center gap-1"><Icon name="trash" size={10} /> Borrar</button>}
+                                                </div>
+                                                <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-slate-400 w-full mt-1" />
                                             </div>
                                         </div>
                                     )}
@@ -674,6 +853,16 @@
                                             <input type="text" value={centerLabel} onChange={e=>setCenterLabel(e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-white focus:border-cyan-500 outline-none" />
                                         </div>
                                     )}
+
+                                    {/* Smart Paste Button */}
+                                    <div className="mb-4">
+                                        <button 
+                                            onClick={() => setShowPasteModal(true)}
+                                            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-cyan-300 font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
+                                        >
+                                            <Icon name="paste" size={18} /> Pegado Inteligente
+                                        </button>
+                                    </div>
 
                                     {currentTypeConfig.mode === 'multi' ? (
                                         <div className="space-y-3">
@@ -711,8 +900,8 @@
                             <div className="lg:col-span-8 flex flex-col gap-6">
                                 <div className={`rounded-3xl p-8 relative flex-1 flex flex-col items-center justify-center min-h-[500px] shadow-2xl transition-all ${exportTheme==='dark'?'glass-panel bg-gradient-to-br from-white/5 to-transparent':'light-panel bg-white'}`}>
                                     <div ref={chartRef} className="relative z-10 transition-transform duration-500 hover:scale-[1.01]">
-                                        {type==='pie' && <ArrowPieChart categories={categories} theme={exportTheme} title={chartTitle} centerColor={centerColor} centerIcon={centerIcon} />}
-                                        {type==='ring' && <RingChart categories={categories} customTotal={customTotal} theme={exportTheme} title={chartTitle} />}
+                                        {type==='pie' && <ArrowPieChart categories={categories} theme={exportTheme} title={chartTitle} centerColor={centerColor} centerIcon={centerIcon} centerImage={centerImage} />}
+                                        {type==='ring' && <RingChart categories={categories} customTotal={customTotal} theme={exportTheme} title={chartTitle} centerLabel={centerLabel} centerImage={centerImage} />}
                                         {type==='position' && <PositionTableChart categories={categories} theme={exportTheme} title={chartTitle} />}
                                         {type==='process' && <ProcessSmartChart categories={categories} theme={exportTheme} title={chartTitle} />}
                                         {type==='cycle' && <CycleSmartChart categories={categories} theme={exportTheme} title={chartTitle} centerLabel={centerLabel} />}
