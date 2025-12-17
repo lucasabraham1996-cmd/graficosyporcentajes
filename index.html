@@ -180,8 +180,8 @@
             const maxValue = Math.max(...categories.map(c => parseFloat(c.value)||0), 1);
             let accumulatedPercent = 0;
             
-            // Reduced scale even further so labels and arrows fit nicely
-            const baseScale = size / 4.5; 
+            // Scaled down further (size/6) to allow plenty of room for text wrapping without clipping
+            const baseScale = size / 6; 
             
             const titleHeight = title ? 60 : 30;
             const totalHeight = size + titleHeight;
@@ -221,7 +221,7 @@
                                 const percent = val / total;
                                 const relativeSize = val / maxValue; 
                                 
-                                // Radius varies less to keep chart compact
+                                // Radius logic
                                 const radius = 1.0 + (relativeSize * 0.2);
                                 
                                 const startPercent = accumulatedPercent;
@@ -238,39 +238,44 @@
                                 const pathData = [`M 0 0`, `L ${startX} ${startY}`, `A ${radius * baseScale} ${radius * baseScale} 0 ${largeArcFlag} 1 ${endX} ${endY}`, `Z`].join(' ');
 
                                 const [edgeX, edgeY] = getCoordinates(midAngle, radius * baseScale);
-                                // Shorter arrow length relative to circle
                                 const arrowLen = 25; 
                                 const [arrowEndX, arrowEndY] = getCoordinates(midAngle, (radius * baseScale) + arrowLen);
                                 
-                                const currentAngleDeg = (midAngle * 360) - 90;
-                                // Simple logic to determine text side
-                                // 0 to 180 is Right side (since -90 rotation makes 0 top) -> actually 0 to 0.5 percent
-                                // Wait, simple X coordinate check is safer after rotation
-                                
-                                // Calculate unrotated X to determine side
-                                const realX = arrowEndX; // relative to center, rotated by parent group? No, parent is rotated.
-                                
-                                // We need text anchor logic based on angle
+                                // Text side logic
                                 const isLeft = (midAngle > 0.5);
+                                
+                                // Dimensions for text box
+                                const labelWidth = 90;
+                                const labelHeight = 40;
+                                const foX = isLeft ? -labelWidth - 5 : 5;
+                                const foY = -labelHeight / 2;
 
                                 return (
                                     <g key={cat.id}>
                                         <path d={pathData} fill={`url(#pieGrad_${cat.id})`} stroke={theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'white'} strokeWidth="1" filter="url(#glow)" />
                                         <line x1={edgeX} y1={edgeY} x2={arrowEndX} y2={arrowEndY} stroke={textColor} strokeOpacity="0.5" strokeWidth="1.5" />
                                         <circle cx={edgeX} cy={edgeY} r="3" fill={cat.color} />
+                                        
+                                        {/* Label container using foreignObject for text wrapping */}
                                         <g transform={`translate(${arrowEndX}, ${arrowEndY}) rotate(90)`}>
-                                            <text 
-                                                x={isLeft ? -5 : 5} 
-                                                y={0}
-                                                dy="0.3em" 
-                                                textAnchor={isLeft ? "end" : "start"} 
-                                                fill={textColor} 
-                                                fontSize="14" 
-                                                fontWeight="700" 
-                                                style={{fontFamily: 'Inter, sans-serif'}}
-                                            >
-                                                {cat.label} ({Math.round(percent * 100)}%)
-                                            </text>
+                                            <foreignObject x={foX} y={foY} width={labelWidth} height={labelHeight}>
+                                                <div xmlns="http://www.w3.org/1999/xhtml" style={{
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: isLeft ? 'flex-end' : 'flex-start',
+                                                    height: '100%', 
+                                                    color: textColor, 
+                                                    fontFamily: 'Inter, sans-serif',
+                                                    fontSize: '11px',
+                                                    fontWeight: '700',
+                                                    textAlign: isLeft ? 'right' : 'left',
+                                                    lineHeight: '1.1'
+                                                }}>
+                                                    <span>
+                                                        {cat.label} <span style={{opacity:0.8, fontWeight:'normal'}}>({Math.round(percent * 100)}%)</span>
+                                                    </span>
+                                                </div>
+                                            </foreignObject>
                                         </g>
                                     </g>
                                 );
@@ -685,6 +690,7 @@
             const chartRef = useRef(null);
 
             const [simpleData, setSimpleData] = useState({ label: 'Ventas', value: 75, max: 100, c1: '#3b82f6', c2: '#06b6d4' });
+            // Valor es string por defecto para permitir texto en Smart charts
             const [categories, setCategories] = useState([{ id: 1, label: 'Prod A', value: "40", color: '#f472b6' }, { id: 2, label: 'Prod B', value: "25", color: '#22d3ee' }, { id: 3, label: 'Serv C', value: "35", color: '#a78bfa' }]);
             const [customTotal, setCustomTotal] = useState(0);
 
